@@ -7,7 +7,7 @@ using var connection = new MySqlConnection(connectionString);
 try
 {
     connection.Open();
-    Console.WriteLine("¡Conexión exitosa a juego_uno! 🎉");
+    Console.WriteLine("¡Conexión exitosa a juego_uno!");
 }
 catch (Exception ex)
 {
