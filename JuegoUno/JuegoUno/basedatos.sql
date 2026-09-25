@@ -1,4 +1,4 @@
-﻿CREATE DATABASE IF NOT EXISTS juego_uno;
+CREATE DATABASE IF NOT EXISTS juego_uno;
 USE juego_uno;
 
 CREATE TABLE Jugadores (

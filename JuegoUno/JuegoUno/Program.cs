@@ -33,6 +33,32 @@ try
             Console.WriteLine($"  ID: {id} - Nombre: {nombre}");
         }
     }
+
+    // Registrar una partida nueva
+    string insertPartida = "INSERT INTO Partidas (fecha) VALUES (NOW())";
+    using (var cmdPartida = new MySqlCommand(insertPartida, connection))
+    {
+        cmdPartida.ExecuteNonQuery();
+    }
+
+    // Obtener el id de esa partida recién creada
+
+    ulong idPartida;
+    using (var cmdId = new MySqlCommand("SELECT LAST_INSERT_ID()", connection))
+    {
+        idPartida = (ulong)cmdId.ExecuteScalar();
+    }
+
+    // Registrar el resultado de un jugador en esa partida
+    string insertHistorial = "INSERT INTO HistorialPartidas (id_partida, id_jugador, resultado) VALUES (@partida, @jugador, @resultado)";
+    using (var cmdHistorial = new MySqlCommand(insertHistorial, connection))
+    {
+        cmdHistorial.Parameters.AddWithValue("@partida", idPartida);
+        cmdHistorial.Parameters.AddWithValue("@jugador", 1); // el id del jugador, ej. 1
+        cmdHistorial.Parameters.AddWithValue("@resultado", "Ganada");
+        cmdHistorial.ExecuteNonQuery();
+        Console.WriteLine($"Partida #{idPartida} registrada con resultado 'Ganada'.\n");
+    }
 }
 catch (Exception ex)
 {
