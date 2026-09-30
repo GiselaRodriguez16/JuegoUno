@@ -64,7 +64,7 @@ try
     Mazo mazo = new Mazo();
     mazo.Barajar();
 
-    // Crear la lista de jugadores (con sus cartas)
+    // Crear la lista de jugadores con sus cartas
     List<Jugador> jugadores = new List<Jugador>();
     for (int i = 0; i < idsJugadores.Count; i++)
     {
@@ -74,7 +74,7 @@ try
             Nombre = nombresJugadores[i]
         };
 
-        // Repartir 7 cartas a cada jugador (regla oficial del UNO)
+        // Repartir 7 cartas a cada jugador 
         for (int c = 0; c < 7; c++)
         {
             j.Mano.Add(mazo.RobarCarta());
@@ -87,11 +87,107 @@ try
     Carta cartaActual = mazo.RobarCarta();
     Console.WriteLine($"\nCarta inicial: {cartaActual}\n");
 
-    // Mostrar la mano de cada jugador (para probar que funciona)
+    // Mostrar la mano de cada jugador 
     foreach (var j in jugadores)
     {
         j.MostrarMano();
         Console.WriteLine();
+    }
+
+    //Turno
+    int turnoActual = 0;
+    int direccion = 1; // 1 = sentido normal, -1 = sentido invertido
+
+    while (true)
+    {
+        Jugador jugadorEnTurno = jugadores[turnoActual];
+        Console.WriteLine($"Turno de {jugadorEnTurno.Nombre}");
+        Console.WriteLine($"Carta actual: {cartaActual}");
+        jugadorEnTurno.MostrarMano();
+
+        Console.Write("Elige el número de la carta a tirar (o -1 para tomar una nueva carta): ");
+        int eleccion = int.Parse(Console.ReadLine());
+
+        if (eleccion == -1)
+        {
+            Carta nueva = mazo.RobarCarta();
+            jugadorEnTurno.Mano.Add(nueva);
+            Console.WriteLine($"{jugadorEnTurno.Nombre} tomo una carta.\n");
+
+            turnoActual = (turnoActual + direccion + jugadores.Count) % jugadores.Count;
+            continue;
+        }
+        else if (eleccion >= 0 && eleccion < jugadorEnTurno.Mano.Count)
+        {
+            Carta cartaElegida = jugadorEnTurno.Mano[eleccion];
+
+            if (cartaElegida.EsValidaSobre(cartaActual))
+            {
+                jugadorEnTurno.Mano.RemoveAt(eleccion);
+
+                // Si es comodín (Comodin o Mas4), preguntar de qué color sigue
+                if (cartaElegida.Color == "Ninguno")
+                {
+                    Console.Write("Elige el nuevo color (Rojo, Amarillo, Verde, Azul): ");
+                    string nuevoColor = Console.ReadLine();
+                    cartaElegida.Color = nuevoColor;
+                }
+
+                cartaActual = cartaElegida;
+                Console.WriteLine($"{jugadorEnTurno.Nombre} tiró {cartaElegida}\n");
+
+                if (jugadorEnTurno.Mano.Count == 0)
+                {
+                    Console.WriteLine($"🎉 ¡{jugadorEnTurno.Nombre} ganó la partida! 🎉");
+                    break;
+                }
+
+                // Calcular quién sigue (antes de aplicar efectos)
+                int siguienteTurno = (turnoActual + direccion + jugadores.Count) % jugadores.Count;
+
+                // Aplicar efectos especiales
+                switch (cartaElegida.Tipo)
+                {
+                    case "Salta":
+                        Console.WriteLine($"{jugadores[siguienteTurno].Nombre} pierde su turno.\n");
+                        siguienteTurno = (siguienteTurno + direccion + jugadores.Count) % jugadores.Count;
+                        break;
+
+                    case "Reversa":
+                        direccion *= -1;
+                        Console.WriteLine("Se invierte el sentido del juego.\n");
+                        siguienteTurno = (turnoActual + direccion + jugadores.Count) % jugadores.Count;
+                        break;
+
+                    case "Mas2":
+                        Jugador victimaMas2 = jugadores[siguienteTurno];
+                        for (int k = 0; k < 2; k++) victimaMas2.Mano.Add(mazo.RobarCarta());
+                        Console.WriteLine($"{victimaMas2.Nombre} toma 2 cartas y pierde su turno.\n");
+                        siguienteTurno = (siguienteTurno + direccion + jugadores.Count) % jugadores.Count;
+                        break;
+
+                    case "Mas4":
+                        Jugador victimaMas4 = jugadores[siguienteTurno];
+                        for (int k = 0; k < 4; k++) victimaMas4.Mano.Add(mazo.RobarCarta());
+                        Console.WriteLine($"{victimaMas4.Nombre} toma 4 cartas y pierde su turno.\n");
+                        siguienteTurno = (siguienteTurno + direccion + jugadores.Count) % jugadores.Count;
+                        break;
+                }
+
+                turnoActual = siguienteTurno;
+                continue; // ya avanzamos el turno manualmente, saltamos el avance normal de abajo
+            }
+            else
+            {
+                Console.WriteLine("Carta no válida, intenta de nuevo.\n");
+                continue; // no avanza el turno, vuelve a preguntar
+            }
+        }
+        else
+        {
+            Console.WriteLine("Opción inválida.\n");
+            continue;
+        }
     }
 
     // Registrar una partida nueva

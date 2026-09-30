@@ -35,7 +35,7 @@ namespace JuegoUno
                 }
             }
 
-            // Comodines (sin color, 4 de cada tipo)
+            // Comodines sin color, 4 de cada tipo
             for (int i = 0; i < 4; i++)
             {
                 Cartas.Add(new Carta { Color = "Ninguno", Tipo = "Comodin" });

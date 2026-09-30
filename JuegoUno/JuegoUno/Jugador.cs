@@ -8,7 +8,7 @@ namespace JuegoUno
 {
     public class Jugador
     {
-        public int Id { get; set; }             // El id que ya tienes guardado en MySQL
+        public int Id { get; set; }             
         public string Nombre { get; set; }
         public List<Carta> Mano { get; set; } = new List<Carta>();
 
