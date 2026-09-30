@@ -1,4 +1,5 @@
 ﻿using MySqlConnector;
+using System.Collections.Generic;
 
 string connectionString = File.ReadAllText("config.txt").Trim();
 
@@ -9,29 +10,51 @@ try
     connection.Open();
     Console.WriteLine("¡Conexión exitosa a juego_uno! 🎉\n");
 
-    //Insertar un jugador de prueba
-    string nombreJugador = "Ale";
+    //Numero de jugadores
+    Console.Write("Numero de jugadores: ");
+    int numJugadores = int.Parse(Console.ReadLine());
 
-    string insertQuery = "INSERT INTO Jugadores (nombre) VALUES (@nombre)";
-    using (var insertCmd = new MySqlCommand(insertQuery, connection))
-    {
-        insertCmd.Parameters.AddWithValue("@nombre", nombreJugador);
-        insertCmd.ExecuteNonQuery();
-        Console.WriteLine($"Jugador '{nombreJugador}' agregado correctamente.\n");
-    }
+    List<int> idsJugadores = new List<int>();
 
-    //Leer los jugadores
-    string selectQuery = "SELECT id, nombre FROM Jugadores";
-    using (var selectCmd = new MySqlCommand(selectQuery, connection))
-    using (var reader = selectCmd.ExecuteReader())
+    for(int i=1; i<=numJugadores; i++)
     {
-        Console.WriteLine("Lista de jugadores registrados:");
-        while (reader.Read())
+        Console.Write($"Nombre del jugador {i}: ");
+        string nombreJugador = Console.ReadLine();
+
+        //Si el jugador existe
+        int idJugador;
+        string checkQuery = "SELECT id FROM Jugadores WHERE nombre = @nombre";
+        using (var checkCmd = new MySqlCommand(checkQuery, connection))
         {
-            int id = reader.GetInt32("id");
-            string nombre = reader.GetString("nombre");
-            Console.WriteLine($"  ID: {id} - Nombre: {nombre}");
+            checkCmd.Parameters.AddWithValue("@nombre", nombreJugador);
+            object resultado = checkCmd.ExecuteScalar();
+
+            if(resultado!=null)
+            {
+                //Si ya existe tomamos su id
+                idJugador = Convert.ToInt32(resultado);
+                Console.WriteLine($"  Jugador '{nombreJugador}' ya existía (ID: {idJugador}).\n");
+            }
+            else
+            {
+                // Si no existe lo insertamos
+                string insertQuery = "INSERT INTO Jugadores (nombre) VALUES (@nombre)";
+                using (var insertCmd = new MySqlCommand(insertQuery, connection))
+                {
+                    insertCmd.Parameters.AddWithValue("@nombre", nombreJugador);
+                    insertCmd.ExecuteNonQuery();
+                }
+
+                using (var idCmd = new MySqlCommand("SELECT LAST_INSERT_ID()", connection))
+                {
+                    idJugador = Convert.ToInt32(idCmd.ExecuteScalar());
+                }
+
+                Console.WriteLine($"  Jugador '{nombreJugador}' agregado (ID: {idJugador}).\n");
+            }
         }
+
+        idsJugadores.Add(idJugador);
     }
 
     // Registrar una partida nueva
