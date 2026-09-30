@@ -1,4 +1,5 @@
-﻿using MySqlConnector;
+﻿using JuegoUno;
+using MySqlConnector;
 using System.Collections.Generic;
 
 string connectionString = File.ReadAllText("config.txt").Trim();
@@ -15,8 +16,9 @@ try
     int numJugadores = int.Parse(Console.ReadLine());
 
     List<int> idsJugadores = new List<int>();
+    List<string> nombresJugadores = new List<string>();
 
-    for(int i=1; i<=numJugadores; i++)
+    for (int i=1; i<=numJugadores; i++)
     {
         Console.Write($"Nombre del jugador {i}: ");
         string nombreJugador = Console.ReadLine();
@@ -55,6 +57,41 @@ try
         }
 
         idsJugadores.Add(idJugador);
+        nombresJugadores.Add(nombreJugador);
+    }
+
+    // Crear y barajar el mazo
+    Mazo mazo = new Mazo();
+    mazo.Barajar();
+
+    // Crear la lista de jugadores (con sus cartas)
+    List<Jugador> jugadores = new List<Jugador>();
+    for (int i = 0; i < idsJugadores.Count; i++)
+    {
+        Jugador j = new Jugador
+        {
+            Id = idsJugadores[i],
+            Nombre = nombresJugadores[i]
+        };
+
+        // Repartir 7 cartas a cada jugador (regla oficial del UNO)
+        for (int c = 0; c < 7; c++)
+        {
+            j.Mano.Add(mazo.RobarCarta());
+        }
+
+        jugadores.Add(j);
+    }
+
+    // Sacar la primera carta para iniciar la pila de descarte
+    Carta cartaActual = mazo.RobarCarta();
+    Console.WriteLine($"\nCarta inicial: {cartaActual}\n");
+
+    // Mostrar la mano de cada jugador (para probar que funciona)
+    foreach (var j in jugadores)
+    {
+        j.MostrarMano();
+        Console.WriteLine();
     }
 
     // Registrar una partida nueva
