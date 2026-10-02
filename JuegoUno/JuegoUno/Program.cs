@@ -85,6 +85,16 @@ try
 
     // Sacar la primera carta para iniciar la pila de descarte
     Carta cartaActual = mazo.RobarCarta();
+
+    // Si la primera carta es un comodín, el primer jugador elige el color
+    if (cartaActual.Color == "Ninguno")
+    {
+        Console.WriteLine($"\nLa carta inicial es un comodín: {cartaActual}");
+        Console.Write($"{jugadores[0].Nombre}, elige el color inicial (Rojo, Amarillo, Verde, Azul): ");
+        string colorInicial = Console.ReadLine();
+        cartaActual.Color = colorInicial;
+    }
+
     Console.WriteLine($"\nCarta inicial: {cartaActual}\n");
 
     // Mostrar la mano de cada jugador 
@@ -94,9 +104,38 @@ try
         Console.WriteLine();
     }
 
+
+    // Registrar una partida nueva
+    string insertPartida = "INSERT INTO Partidas (fecha) VALUES (NOW())";
+    using (var cmdPartida = new MySqlCommand(insertPartida, connection))
+    {
+        cmdPartida.ExecuteNonQuery();
+    }
+
+    // Obtener el id de esa partida recién creada
+
+    ulong idPartida;
+    using (var cmdId = new MySqlCommand("SELECT LAST_INSERT_ID()", connection))
+    {
+        idPartida = (ulong)cmdId.ExecuteScalar();
+    }
+
     //Turno
     int turnoActual = 0;
     int direccion = 1; // 1 = sentido normal, -1 = sentido invertido
+
+    // Función para registrar un movimiento en el log
+    void RegistrarLog(ulong idPartidaLog, int idJugadorLog, string movimiento)
+    {
+        string logQuery = "INSERT INTO LogJuego (id_partida, id_jugador, movimiento) VALUES (@partida, @jugador, @movimiento)";
+        using (var logCmd = new MySqlCommand(logQuery, connection))
+        {
+            logCmd.Parameters.AddWithValue("@partida", idPartidaLog);
+            logCmd.Parameters.AddWithValue("@jugador", idJugadorLog);
+            logCmd.Parameters.AddWithValue("@movimiento", movimiento);
+            logCmd.ExecuteNonQuery();
+        }
+    }
 
     while (true)
     {
@@ -113,6 +152,7 @@ try
             Carta nueva = mazo.RobarCarta();
             jugadorEnTurno.Mano.Add(nueva);
             Console.WriteLine($"{jugadorEnTurno.Nombre} tomo una carta.\n");
+            RegistrarLog(idPartida, jugadorEnTurno.Id, "Robó una carta");
 
             turnoActual = (turnoActual + direccion + jugadores.Count) % jugadores.Count;
             continue;
@@ -136,9 +176,27 @@ try
                 cartaActual = cartaElegida;
                 Console.WriteLine($"{jugadorEnTurno.Nombre} tiró {cartaElegida}\n");
 
+                RegistrarLog(idPartida, jugadorEnTurno.Id, $"Tiró {cartaElegida}");
+
                 if (jugadorEnTurno.Mano.Count == 0)
                 {
-                    Console.WriteLine($"🎉 ¡{jugadorEnTurno.Nombre} ganó la partida! 🎉");
+                    Console.WriteLine($" ¡{jugadorEnTurno.Nombre} ganó la partida! ");
+                    RegistrarLog(idPartida, jugadorEnTurno.Id, "Ganó la partida");
+
+                    // Guardar resultado de cada jugador en HistorialPartidas
+                    foreach (var j in jugadores)
+                    {
+                        string resultado = (j.Id == jugadorEnTurno.Id) ? "Ganada" : "Perdida";
+                        string insertHistorial = "INSERT INTO HistorialPartidas (id_partida, id_jugador, resultado) VALUES (@partida, @jugador, @resultado)";
+                        using (var cmdHistorial = new MySqlCommand(insertHistorial, connection))
+                        {
+                            cmdHistorial.Parameters.AddWithValue("@partida", idPartida);
+                            cmdHistorial.Parameters.AddWithValue("@jugador", j.Id);
+                            cmdHistorial.Parameters.AddWithValue("@resultado", resultado);
+                            cmdHistorial.ExecuteNonQuery();
+                        }
+                    }
+
                     break;
                 }
 
@@ -190,31 +248,7 @@ try
         }
     }
 
-    // Registrar una partida nueva
-    string insertPartida = "INSERT INTO Partidas (fecha) VALUES (NOW())";
-    using (var cmdPartida = new MySqlCommand(insertPartida, connection))
-    {
-        cmdPartida.ExecuteNonQuery();
-    }
-
-    // Obtener el id de esa partida recién creada
-
-    ulong idPartida;
-    using (var cmdId = new MySqlCommand("SELECT LAST_INSERT_ID()", connection))
-    {
-        idPartida = (ulong)cmdId.ExecuteScalar();
-    }
-
-    // Registrar el resultado de un jugador en esa partida
-    string insertHistorial = "INSERT INTO HistorialPartidas (id_partida, id_jugador, resultado) VALUES (@partida, @jugador, @resultado)";
-    using (var cmdHistorial = new MySqlCommand(insertHistorial, connection))
-    {
-        cmdHistorial.Parameters.AddWithValue("@partida", idPartida);
-        cmdHistorial.Parameters.AddWithValue("@jugador", 1); // el id del jugador, ej. 1
-        cmdHistorial.Parameters.AddWithValue("@resultado", "Ganada");
-        cmdHistorial.ExecuteNonQuery();
-        Console.WriteLine($"Partida #{idPartida} registrada con resultado 'Ganada'.\n");
-    }
+    
 }
 catch (Exception ex)
 {
