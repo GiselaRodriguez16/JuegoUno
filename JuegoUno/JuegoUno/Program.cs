@@ -1,4 +1,10 @@
-﻿using JuegoUno;
+﻿using System;
+using System.Windows.Forms;
+
+ApplicationConfiguration.Initialize();
+Application.Run(new FormJuego());
+
+/*using JuegoUno;
 using MySqlConnector;
 using System.Collections.Generic;
 
@@ -256,4 +262,4 @@ catch (Exception ex)
 }
 
 Console.WriteLine("\nPresiona una tecla para salir...");
-Console.ReadKey();
+Console.ReadKey();*/
