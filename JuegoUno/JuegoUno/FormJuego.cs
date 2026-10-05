@@ -1,4 +1,5 @@
 ﻿using JuegoUno;
+using System.IO;
 using System;
 using System.Collections.Generic;
 using System.Drawing;
@@ -7,30 +8,21 @@ using System.Windows.Forms;
 public class FormJuego : Form
 {
     private System.Windows.Forms.Label lblTurno;
+    private System.Windows.Forms.Label lblUltimaAccion;
     private FlowLayoutPanel panelOtrosJugadores;
     private Panel panelCartaActual;
     private FlowLayoutPanel panelMano;
-    private Button btnRobar;
+    private PictureBox picMazo;
 
-    // Eventos para que Program.cs reaccione a los clicks
-    public event Action<int> CartaClickeada; // manda el índice de la carta en la mano
+    public event Action<int> CartaClickeada; 
     public event Action RobarClickeado;
-
-    private static readonly Dictionary<string, Color> ColoresCartas = new Dictionary<string, Color>
-    {
-        { "Rojo", ColorTranslator.FromHtml("#660C2C") },
-        { "Amarillo", ColorTranslator.FromHtml("#FF98BB") },
-        { "Verde", ColorTranslator.FromHtml("#7ABBEA") },
-        { "Azul", ColorTranslator.FromHtml("#D78FCF") },
-        { "Ninguno", Color.Black }
-    };
 
     public FormJuego()
     {
         this.Text = "UNO - Juego";
-        this.Width = 900;
-        this.Height = 600;
-        this.BackColor = Color.DarkGreen;
+        this.Width = 1100;
+        this.Height = 700;
+        this.BackColor = ColoresJuego.FondoVentana;
 
         lblTurno = new System.Windows.Forms.Label();
         lblTurno.Text = "Turno de: ...";
@@ -40,60 +32,72 @@ public class FormJuego : Form
         lblTurno.AutoSize = true;
         this.Controls.Add(lblTurno);
 
+        lblUltimaAccion = new System.Windows.Forms.Label();
+        lblUltimaAccion.Text = "";
+        lblUltimaAccion.ForeColor = Color.Gold;
+        lblUltimaAccion.Font = new Font("Arial", 11, FontStyle.Italic);
+        lblUltimaAccion.Location = new Point(20, 180);
+        lblUltimaAccion.AutoSize = true;
+        this.Controls.Add(lblUltimaAccion);
+
         panelOtrosJugadores = new FlowLayoutPanel();
-        panelOtrosJugadores.Location = new Point(20, 60);
+        panelOtrosJugadores.Location = new Point(130, 60);
         panelOtrosJugadores.Width = 840;
         panelOtrosJugadores.Height = 100;
-        panelOtrosJugadores.BackColor = Color.DarkGreen;
+        panelOtrosJugadores.BackColor = ColoresJuego.FondoPanel;
         this.Controls.Add(panelOtrosJugadores);
 
         panelCartaActual = new Panel();
         panelCartaActual.Location = new Point(400, 200);
-        panelCartaActual.Width = 80;
-        panelCartaActual.Height = 110;
+        panelCartaActual.Width = 90;
+        panelCartaActual.Height = 130;
         this.Controls.Add(panelCartaActual);
 
-        btnRobar = new Button();
-        btnRobar.Text = "Robar carta";
-        btnRobar.Location = new Point(380, 330);
-        btnRobar.Width = 120;
-        btnRobar.Click += (s, e) => RobarClickeado?.Invoke();
-        this.Controls.Add(btnRobar);
+        picMazo = new PictureBox();
+        picMazo.Width = 80;
+        picMazo.Height = 120;
+        picMazo.SizeMode = PictureBoxSizeMode.StretchImage;
+        picMazo.Location = new Point(620, 200); // junto a la carta central, ajusta si quieres
+
+        string rutaReverso = Path.Combine(Application.StartupPath, "Cartas", "Reverso.png");
+        if (File.Exists(rutaReverso))
+        {
+            picMazo.Image = Image.FromFile(rutaReverso);
+        }
+
+        picMazo.Cursor = Cursors.Hand;
+        picMazo.Click += (s, e) => RobarClickeado?.Invoke();
+        this.Controls.Add(picMazo);
 
         panelMano = new FlowLayoutPanel();
-        panelMano.Location = new Point(20, 420);
+        panelMano.Location = new Point(130, 500);
         panelMano.Width = 840;
-        panelMano.Height = 120;
-        panelMano.BackColor = Color.ForestGreen;
+        panelMano.Height = 150;
+        panelMano.BackColor = ColoresJuego.FondoPanel;
         this.Controls.Add(panelMano);
     }
 
-    private Button CrearCartaVisual(Carta carta, EventHandler onClick)
+    private PictureBox CrearCartaVisual(Carta carta, EventHandler onClick)
     {
-        Button btn = new Button();
-        btn.Width = 70;
-        btn.Height = 100;
-        btn.BackColor = ColoresCartas[carta.Color];
-        btn.ForeColor = Color.White;
-        btn.Font = new Font("Arial", 14, FontStyle.Bold);
-        btn.FlatStyle = FlatStyle.Flat;
-        btn.FlatAppearance.BorderColor = Color.White;
-        btn.FlatAppearance.BorderSize = 2;
+        PictureBox pic = new PictureBox();
+        pic.Width = 80;
+        pic.Height = 120;
+        pic.SizeMode = PictureBoxSizeMode.StretchImage;
+        pic.Margin = new Padding(5);
 
-        btn.Text = carta.Tipo == "Numero" ? carta.Numero.ToString() : carta.Tipo switch
+        string rutaImagen = Path.Combine(Application.StartupPath, "Cartas", carta.NombreImagen());
+        if (File.Exists(rutaImagen))
         {
-            "Salta" => "🚫",
-            "Reversa" => "🔄",
-            "Mas2" => "+2",
-            "Mas4" => "+4",
-            "Comodin" => "🎨",
-            _ => "?"
-        };
+            pic.Image = Image.FromFile(rutaImagen);
+        }
 
         if (onClick != null)
-            btn.Click += onClick;
+        {
+            pic.Cursor = Cursors.Hand;
+            pic.Click += onClick;
+        }
 
-        return btn;
+        return pic;
     }
 
     public void ActualizarPantalla(List<Jugador> jugadores, int turnoActual, Carta cartaActual)
@@ -103,8 +107,7 @@ public class FormJuego : Form
         lblTurno.Text = $"Turno de: {jugadorEnTurno.Nombre}";
 
         panelCartaActual.Controls.Clear();
-        Button cartaVisual = CrearCartaVisual(cartaActual, null);
-        cartaVisual.Enabled = false;
+        PictureBox cartaVisual = CrearCartaVisual(cartaActual, null);
         panelCartaActual.Controls.Add(cartaVisual);
 
         panelOtrosJugadores.Controls.Clear();
@@ -125,10 +128,15 @@ public class FormJuego : Form
         panelMano.Controls.Clear();
         for (int i = 0; i < jugadorEnTurno.Mano.Count; i++)
         {
-            int indice = i; // importante: copia local para que el closure no se confunda
-            Button btnCarta = CrearCartaVisual(jugadorEnTurno.Mano[i], (s, e) => CartaClickeada?.Invoke(indice));
-            panelMano.Controls.Add(btnCarta);
+            int indice = i;
+            PictureBox picCarta = CrearCartaVisual(jugadorEnTurno.Mano[i], (s, e) => CartaClickeada?.Invoke(indice));
+            panelMano.Controls.Add(picCarta);
         }
+    }
+
+    public void MostrarUltimaAccion(string texto)
+    {
+        lblUltimaAccion.Text = texto;
     }
 
     public void MostrarGanador(string nombreGanador)

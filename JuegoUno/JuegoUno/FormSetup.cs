@@ -16,9 +16,9 @@ public class FormSetup : Form
     public FormSetup()
     {
         this.Text = "Configurar jugadores";
-        this.Width = 400;
-        this.Height = 450;
-        this.BackColor = Color.DarkGreen;
+        this.Width = 1100;
+        this.Height = 700;
+        this.BackColor = ColoresJuego.FondoVentana;
         this.StartPosition = FormStartPosition.CenterScreen;
 
         lblCantidad = new System.Windows.Forms.Label();

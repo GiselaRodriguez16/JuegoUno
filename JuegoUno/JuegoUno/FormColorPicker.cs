@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Drawing;
 using System.Windows.Forms;
 
 public class FormColorPicker : Form
@@ -12,21 +11,25 @@ public class FormColorPicker : Form
         this.Width = 300;
         this.Height = 180;
         this.StartPosition = FormStartPosition.CenterScreen;
-        this.BackColor = Color.DarkGreen;
+        this.BackColor = ColoresJuego.FondoVentana;
 
-        string[] colores = { "Rojo", "Rosa", "Azul", "Morado" };
+        string[] colores = { "Rojo", "Amarillo", "Verde", "Azul" };
         int x = 20;
 
         foreach (string color in colores)
         {
             Button btn = new Button();
-            btn.Text = color;
             btn.Width = 60;
             btn.Height = 60;
-            btn.Location = new Point(x, 40);
+            btn.Location = new System.Drawing.Point(x, 40);
+            btn.BackColor = ColoresJuego.Cartas[color]; 
+            btn.FlatStyle = FlatStyle.Flat;
+            btn.Text = ""; 
+
+            string colorCapturado = color; 
             btn.Click += (s, e) =>
             {
-                ColorElegido = color;
+                ColorElegido = colorCapturado;
                 this.DialogResult = DialogResult.OK;
                 this.Close();
             };

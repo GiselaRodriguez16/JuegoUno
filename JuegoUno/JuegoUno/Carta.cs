@@ -22,23 +22,27 @@ namespace JuegoUno
 
         public bool EsValidaSobre(Carta cartaActual)
         {
-            // Los comodines siempre se pueden tirar
             if (Color == "Ninguno")
                 return true;
 
-            // Coincide el color
             if (Color == cartaActual.Color)
                 return true;
 
-            // Coincide el número 
             if (Tipo == "Numero" && cartaActual.Tipo == "Numero" && Numero == cartaActual.Numero)
                 return true;
 
-            // Coincide el tipo especial 
             if (Tipo != "Numero" && Tipo == cartaActual.Tipo)
                 return true;
 
             return false;
+        }
+
+        public string NombreImagen()
+        {
+            if (Tipo == "Numero")
+                return $"{Color}_{Numero}.png";
+            else
+                return $"{Color}_{Tipo}.png";
         }
     }
 }
