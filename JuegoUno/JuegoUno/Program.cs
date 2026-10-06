@@ -141,7 +141,7 @@ try
                 cartaElegida.Color = colorForm.ColorElegido ?? "Rojo";
             }
             formJuego.MostrarUltimaAccion($"{jugadorEnTurno.Nombre} eligió el color {cartaElegida.Color}");
-            formJuego.Refresh();
+           
         }
 
         cartaActual = cartaElegida;
@@ -186,6 +186,7 @@ try
 
         turnoActual = siguienteTurno;
         formJuego.ActualizarPantalla(jugadores, turnoActual, cartaActual);
+        formJuego.ForzarRepintado();
     };
 
     formJuego.RobarClickeado += () =>

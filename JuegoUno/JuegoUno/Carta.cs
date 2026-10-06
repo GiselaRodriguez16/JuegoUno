@@ -41,6 +41,8 @@ namespace JuegoUno
         {
             if (Tipo == "Numero")
                 return $"{Color}_{Numero}.png";
+            else if (Tipo == "Comodin" || Tipo == "Mas4")
+                return $"Ninguno_{Tipo}.png"; 
             else
                 return $"{Color}_{Tipo}.png";
         }

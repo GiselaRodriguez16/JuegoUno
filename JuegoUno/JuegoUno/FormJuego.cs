@@ -1,21 +1,23 @@
-﻿using JuegoUno;
-using System.IO;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.IO;
 using System.Windows.Forms;
+using JuegoUno;
 
 public class FormJuego : Form
 {
     private System.Windows.Forms.Label lblTurno;
-    private System.Windows.Forms.Label lblUltimaAccion;
-    private FlowLayoutPanel panelOtrosJugadores;
+    private FlowLayoutPanel panelJugadoresArriba; 
+    private System.Windows.Forms.Label lblNombreTurno; 
     private Panel panelCartaActual;
-    private FlowLayoutPanel panelMano;
     private PictureBox picMazo;
+    private PictureBox picUno;
+    private FlowLayoutPanel panelMano; 
 
-    public event Action<int> CartaClickeada; 
+    public event Action<int> CartaClickeada;
     public event Action RobarClickeado;
+    public event Action UnoClickeado;
 
     public FormJuego()
     {
@@ -28,27 +30,22 @@ public class FormJuego : Form
         lblTurno.Text = "Turno de: ...";
         lblTurno.ForeColor = Color.White;
         lblTurno.Font = new Font("Arial", 14, FontStyle.Bold);
-        lblTurno.Location = new Point(20, 20);
+        lblTurno.Location = new Point(20, 15);
         lblTurno.AutoSize = true;
         this.Controls.Add(lblTurno);
 
-        lblUltimaAccion = new System.Windows.Forms.Label();
-        lblUltimaAccion.Text = "";
-        lblUltimaAccion.ForeColor = Color.Gold;
-        lblUltimaAccion.Font = new Font("Arial", 11, FontStyle.Italic);
-        lblUltimaAccion.Location = new Point(20, 180);
-        lblUltimaAccion.AutoSize = true;
-        this.Controls.Add(lblUltimaAccion);
-
-        panelOtrosJugadores = new FlowLayoutPanel();
-        panelOtrosJugadores.Location = new Point(130, 60);
-        panelOtrosJugadores.Width = 840;
-        panelOtrosJugadores.Height = 100;
-        panelOtrosJugadores.BackColor = ColoresJuego.FondoPanel;
-        this.Controls.Add(panelOtrosJugadores);
+        panelJugadoresArriba = new FlowLayoutPanel();
+        panelJugadoresArriba.FlowDirection = FlowDirection.TopDown;
+        panelJugadoresArriba.WrapContents = false;
+        panelJugadoresArriba.AutoScroll = true;
+        panelJugadoresArriba.Location = new Point(20, 50);
+        panelJugadoresArriba.Width = 1050;
+        panelJugadoresArriba.Height = 200;
+        panelJugadoresArriba.BackColor = ColoresJuego.FondoVentana;
+        this.Controls.Add(panelJugadoresArriba);
 
         panelCartaActual = new Panel();
-        panelCartaActual.Location = new Point(400, 200);
+        panelCartaActual.Location = new Point(450, 280);
         panelCartaActual.Width = 90;
         panelCartaActual.Height = 130;
         this.Controls.Add(panelCartaActual);
@@ -57,39 +54,52 @@ public class FormJuego : Form
         picMazo.Width = 80;
         picMazo.Height = 120;
         picMazo.SizeMode = PictureBoxSizeMode.StretchImage;
-        picMazo.Location = new Point(620, 200); // junto a la carta central, ajusta si quieres
-
+        picMazo.Location = new Point(600, 285);
         string rutaReverso = Path.Combine(Application.StartupPath, "Cartas", "Reverso.png");
-        if (File.Exists(rutaReverso))
-        {
-            picMazo.Image = Image.FromFile(rutaReverso);
-        }
-
+        if (File.Exists(rutaReverso)) picMazo.Image = Image.FromFile(rutaReverso);
         picMazo.Cursor = Cursors.Hand;
         picMazo.Click += (s, e) => RobarClickeado?.Invoke();
         this.Controls.Add(picMazo);
 
+        picUno = new PictureBox();
+        picUno.Width = 90;
+        picUno.Height = 90;
+        picUno.SizeMode = PictureBoxSizeMode.Zoom;
+        picUno.Location = new Point(750, 290);
+        string rutaUno = Path.Combine(Application.StartupPath, "Cartas", "BotonUno.png");
+        if (File.Exists(rutaUno)) picUno.Image = Image.FromFile(rutaUno);
+        picUno.Cursor = Cursors.Hand;
+        picUno.Click += (s, e) => UnoClickeado?.Invoke();
+        this.Controls.Add(picUno);
+
+        lblNombreTurno = new System.Windows.Forms.Label();
+        lblNombreTurno.Text = "cartas ...";
+        lblNombreTurno.Font = new Font("Arial", 12, FontStyle.Bold);
+        lblNombreTurno.BackColor = Color.LightPink;
+        lblNombreTurno.AutoSize = true;
+        lblNombreTurno.Location = new Point(20, 440);
+        this.Controls.Add(lblNombreTurno);
+
         panelMano = new FlowLayoutPanel();
-        panelMano.Location = new Point(130, 500);
-        panelMano.Width = 840;
-        panelMano.Height = 150;
-        panelMano.BackColor = ColoresJuego.FondoPanel;
+        panelMano.Location = new Point(20, 475);
+        panelMano.Width = 1050;
+        panelMano.Height = 180;
+        panelMano.BackColor = ColoresJuego.FondoVentana;
+        panelMano.AutoScroll = true;
         this.Controls.Add(panelMano);
     }
 
-    private PictureBox CrearCartaVisual(Carta carta, EventHandler onClick)
+    private PictureBox CrearCartaVisual(Carta carta, EventHandler onClick, int ancho = 80, int alto = 120)
     {
         PictureBox pic = new PictureBox();
-        pic.Width = 80;
-        pic.Height = 120;
+        pic.Width = ancho;
+        pic.Height = alto;
         pic.SizeMode = PictureBoxSizeMode.StretchImage;
         pic.Margin = new Padding(5);
 
         string rutaImagen = Path.Combine(Application.StartupPath, "Cartas", carta.NombreImagen());
         if (File.Exists(rutaImagen))
-        {
             pic.Image = Image.FromFile(rutaImagen);
-        }
 
         if (onClick != null)
         {
@@ -110,20 +120,34 @@ public class FormJuego : Form
         PictureBox cartaVisual = CrearCartaVisual(cartaActual, null);
         panelCartaActual.Controls.Add(cartaVisual);
 
-        panelOtrosJugadores.Controls.Clear();
+        panelJugadoresArriba.Controls.Clear();
         foreach (var j in jugadores)
         {
-            if (j.Id != jugadorEnTurno.Id)
+            if (j.Id == jugadorEnTurno.Id) continue;
+
+            System.Windows.Forms.Label lblNombre = new System.Windows.Forms.Label();
+            lblNombre.Text = $"cartas {j.Nombre}";
+            lblNombre.Font = new Font("Arial", 10, FontStyle.Bold);
+            lblNombre.BackColor = Color.LightPink;
+            lblNombre.AutoSize = true;
+            lblNombre.Margin = new Padding(0, 5, 0, 2);
+            panelJugadoresArriba.Controls.Add(lblNombre);
+
+            FlowLayoutPanel filaCartas = new FlowLayoutPanel();
+            filaCartas.AutoSize = true;
+            filaCartas.WrapContents = false;
+            filaCartas.Margin = new Padding(0, 0, 0, 10);
+
+            foreach (var carta in j.Mano)
             {
-                System.Windows.Forms.Label lblOtro = new System.Windows.Forms.Label();
-                lblOtro.Text = $"{j.Nombre}: {j.Mano.Count} cartas";
-                lblOtro.ForeColor = Color.White;
-                lblOtro.Font = new Font("Arial", 10);
-                lblOtro.AutoSize = true;
-                lblOtro.Margin = new Padding(15, 10, 15, 10);
-                panelOtrosJugadores.Controls.Add(lblOtro);
+                PictureBox picCartaAjena = CrearCartaVisual(carta, null, 55, 80); // más pequeñas
+                filaCartas.Controls.Add(picCartaAjena);
             }
+
+            panelJugadoresArriba.Controls.Add(filaCartas);
         }
+
+        lblNombreTurno.Text = $"cartas {jugadorEnTurno.Nombre}";
 
         panelMano.Controls.Clear();
         for (int i = 0; i < jugadorEnTurno.Mano.Count; i++)
@@ -134,11 +158,6 @@ public class FormJuego : Form
         }
     }
 
-    public void MostrarUltimaAccion(string texto)
-    {
-        lblUltimaAccion.Text = texto;
-    }
-
     public void MostrarGanador(string nombreGanador)
     {
         MessageBox.Show($"🎉 ¡{nombreGanador} ganó la partida! 🎉", "Fin del juego");
@@ -147,5 +166,18 @@ public class FormJuego : Form
     public void MostrarMensaje(string mensaje)
     {
         MessageBox.Show(mensaje);
+    }
+
+    public void MostrarUltimaAccion(string texto)
+    {
+        MostrarMensaje(texto);
+    }
+
+    public void ForzarRepintado()
+    {
+        this.SuspendLayout();
+        this.ResumeLayout(true);
+        this.Invalidate(true);
+        this.Update();
     }
 }

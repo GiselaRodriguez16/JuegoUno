@@ -12,6 +12,6 @@ public static class ColoresJuego
         { "Ninguno", Color.Black }
     };
 
-    public static readonly Color FondoVentana = ColorTranslator.FromHtml("#F2006B");
-    public static readonly Color FondoPanel = ColorTranslator.FromHtml("#26FA56");
+    public static readonly Color FondoVentana = ColorTranslator.FromHtml("#F2006B"); //rosa
+    public static readonly Color FondoPanel = ColorTranslator.FromHtml("#8678B2");
 }
