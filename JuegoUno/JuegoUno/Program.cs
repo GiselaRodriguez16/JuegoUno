@@ -1,17 +1,15 @@
 ﻿using JuegoUno;
-using MySqlConnector;
 using System;
 using System.Collections.Generic;
 using System.Windows.Forms;
+using System.Windows.Forms.Design;
 
 ApplicationConfiguration.Initialize();
+ApiService api = new ApiService();
 
-string connectionString = File.ReadAllText("config.txt").Trim();
-using var connection = new MySqlConnection(connectionString);
 
 try
 {
-    connection.Open();
 
     FormSetup setup = new FormSetup();
     if (setup.ShowDialog() != DialogResult.OK)
@@ -24,32 +22,11 @@ try
 
     foreach (string nombreJugador in nombresJugadores)
     {
-        int idJugador;
-        string checkQuery = "SELECT id FROM Jugadores WHERE nombre = @nombre";
-        using (var checkCmd = new MySqlCommand(checkQuery, connection))
-        {
-            checkCmd.Parameters.AddWithValue("@nombre", nombreJugador);
-            object resultado = checkCmd.ExecuteScalar();
+        Jugador jugador = api.CrearJugador(nombreJugador)
+                             .GetAwaiter()
+                             .GetResult();
 
-            if (resultado != null)
-            {
-                idJugador = Convert.ToInt32(resultado);
-            }
-            else
-            {
-                string insertQuery = "INSERT INTO Jugadores (nombre) VALUES (@nombre)";
-                using (var insertCmd = new MySqlCommand(insertQuery, connection))
-                {
-                    insertCmd.Parameters.AddWithValue("@nombre", nombreJugador);
-                    insertCmd.ExecuteNonQuery();
-                }
-                using (var idCmd = new MySqlCommand("SELECT LAST_INSERT_ID()", connection))
-                {
-                    idJugador = Convert.ToInt32(idCmd.ExecuteScalar());
-                }
-            }
-        }
-        idsJugadores.Add(idJugador);
+        idsJugadores.Add(jugador.Id);
     }
 
     Mazo mazo = new Mazo();
@@ -73,47 +50,40 @@ try
         }
     }
 
-    string insertPartida = "INSERT INTO Partidas (fecha) VALUES (NOW())";
-    using (var cmdPartida = new MySqlCommand(insertPartida, connection))
-    {
-        cmdPartida.ExecuteNonQuery();
-    }
-    ulong idPartida;
-    using (var cmdId = new MySqlCommand("SELECT LAST_INSERT_ID()", connection))
-    {
-        idPartida = (ulong)cmdId.ExecuteScalar();
-    }
+    int idPartida = api.CrearPartida()
+                    .GetAwaiter()
+                    .GetResult();
+
 
     int turnoActual = 0;
     int direccion = 1;
 
     void RegistrarLog(int idJugadorLog, string movimiento)
     {
-        string logQuery = "INSERT INTO LogJuego (id_partida, id_jugador, movimiento) VALUES (@partida, @jugador, @movimiento)";
-        using (var logCmd = new MySqlCommand(logQuery, connection))
-        {
-            logCmd.Parameters.AddWithValue("@partida", idPartida);
-            logCmd.Parameters.AddWithValue("@jugador", idJugadorLog);
-            logCmd.Parameters.AddWithValue("@movimiento", movimiento);
-            logCmd.ExecuteNonQuery();
-        }
+        api.RegistrarLog(
+            idPartida,
+            idJugadorLog,
+            movimiento
+        ).GetAwaiter().GetResult();
     }
+
 
     void GuardarHistorial(Jugador ganador)
     {
         foreach (var j in jugadores)
         {
-            string resultado = (j.Id == ganador.Id) ? "Ganada" : "Perdida";
-            string insertHistorial = "INSERT INTO HistorialPartidas (id_partida, id_jugador, resultado) VALUES (@partida, @jugador, @resultado)";
-            using (var cmdHistorial = new MySqlCommand(insertHistorial, connection))
-            {
-                cmdHistorial.Parameters.AddWithValue("@partida", idPartida);
-                cmdHistorial.Parameters.AddWithValue("@jugador", j.Id);
-                cmdHistorial.Parameters.AddWithValue("@resultado", resultado);
-                cmdHistorial.ExecuteNonQuery();
-            }
+            string resultado = (j.Id == ganador.Id)
+                ? "Ganada"
+                : "Perdida";
+
+            api.GuardarHistorial(
+                idPartida,
+                j.Id,
+                resultado
+            ).GetAwaiter().GetResult();
         }
     }
+
 
     FormJuego formJuego = new FormJuego();
 
