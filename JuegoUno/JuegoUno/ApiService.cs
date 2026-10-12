@@ -20,21 +20,25 @@ namespace JuegoUno
                 nombre = nombre
             };
 
-            var respuesta = await cliente.PostAsJsonAsync("jugadores", datos);
+            var respuesta = await cliente.PostAsJsonAsync("jugadores", datos)
+                             .ConfigureAwait(false);
 
             respuesta.EnsureSuccessStatusCode();
 
-            return await respuesta.Content.ReadFromJsonAsync<Jugador>();
+            return await respuesta.Content.ReadFromJsonAsync<Jugador>()
+                             .ConfigureAwait(false);
         }
 
 
         public async Task<int> CrearPartida()
         {
-            var respuesta = await cliente.PostAsync("partidas", null);
+            var respuesta = await cliente.PostAsync("partidas", null)
+                             .ConfigureAwait(false);
 
             respuesta.EnsureSuccessStatusCode();
 
-            var datos = await respuesta.Content.ReadFromJsonAsync<PartidaRespuesta>();
+            var datos = await respuesta.Content.ReadFromJsonAsync<PartidaRespuesta>()
+                                  .ConfigureAwait(false);
 
             return datos.Id;
         }
@@ -52,7 +56,8 @@ namespace JuegoUno
                 movimiento = movimiento
             };
 
-            var respuesta = await cliente.PostAsJsonAsync("log", datos);
+            var respuesta = await cliente.PostAsJsonAsync("log", datos)
+                                         .ConfigureAwait(false);
 
             respuesta.EnsureSuccessStatusCode();
         }
@@ -70,7 +75,8 @@ namespace JuegoUno
                 resultado = resultado
             };
 
-            var respuesta = await cliente.PostAsJsonAsync("historial", datos);
+            var respuesta = await cliente.PostAsJsonAsync("historial", datos)
+                             .ConfigureAwait(false);
 
             respuesta.EnsureSuccessStatusCode();
         }
