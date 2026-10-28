@@ -57,6 +57,9 @@ try
 
     int turnoActual = 0;
     int direccion = 1;
+    Jugador jugadorDebeCantarUno = null;
+
+    
 
     void RegistrarLog(int idJugadorLog, string movimiento)
     {
@@ -87,8 +90,52 @@ try
 
     FormJuego formJuego = new FormJuego();
 
+    // Control del tiempo para cantar UNO
+    bool esperandoUNO = false;
+    int turnoPendienteUNO = 0;
+    int segundosUNO = 15;
+
+    // Temporizador invisible
+    System.Windows.Forms.Timer timerUNO = new System.Windows.Forms.Timer();
+
+    timerUNO.Interval = 1000; // Un segundo
+
+    timerUNO.Tick += (s, e) =>
+    {
+        segundosUNO--;
+
+        if (segundosUNO <= 0)
+        {
+            timerUNO.Stop();
+
+            // El jugador olvidó cantar UNO: roba una carta
+            if (jugadorDebeCantarUno != null)
+            {
+                jugadorDebeCantarUno.Mano.Add(mazo.RobarCarta());
+
+                RegistrarLog(
+                    jugadorDebeCantarUno.Id,
+                    "No cantó UNO: robó una carta de penalización"
+                );
+            }
+
+            jugadorDebeCantarUno = null;
+            esperandoUNO = false;
+
+            // Pasa al siguiente jugador
+            turnoActual = turnoPendienteUNO;
+
+            formJuego.ActualizarPantalla(
+                jugadores,
+                turnoActual,
+                cartaActual
+            );
+        }
+    };
+
     formJuego.CartaClickeada += (indice) =>
     {
+        if (esperandoUNO) return;
         Jugador jugadorEnTurno = jugadores[turnoActual];
 
         if (indice < 0 || indice >= jugadorEnTurno.Mano.Count) return;
@@ -102,6 +149,15 @@ try
         }
 
         jugadorEnTurno.Mano.RemoveAt(indice);
+
+        if (jugadorEnTurno.Mano.Count == 1)
+        {
+            jugadorDebeCantarUno = jugadorEnTurno;
+        }
+        else
+        {
+            jugadorDebeCantarUno = null;
+        }
 
         if (cartaElegida.Color == "Ninguno")
         {
@@ -154,13 +210,73 @@ try
                 break;
         }
 
+        // Si se quedó con una sola carta, debe cantar UNO
+        if (jugadorEnTurno.Mano.Count == 1)
+        {
+            jugadorDebeCantarUno = jugadorEnTurno;
+            turnoPendienteUNO = siguienteTurno;
+            esperandoUNO = true;
+            segundosUNO = 15;
+
+            timerUNO.Start();
+
+            // Todavía no avanza el turno
+            formJuego.ActualizarPantalla(
+                jugadores,
+                turnoActual,
+                cartaActual
+            );
+
+            return;
+        }
+
+        // Si no tiene una sola carta, pasa normalmente
+        jugadorDebeCantarUno = null;
+
         turnoActual = siguienteTurno;
-        formJuego.ActualizarPantalla(jugadores, turnoActual, cartaActual);
+
+        formJuego.ActualizarPantalla(
+            jugadores,
+            turnoActual,
+            cartaActual
+        );
+
         formJuego.ForzarRepintado();
+    };
+
+    formJuego.UnoClickeado += () =>
+    {
+        // Solo se puede cantar UNO durante la espera
+        if (!esperandoUNO || jugadorDebeCantarUno == null)
+        {
+            return;
+        }
+
+        timerUNO.Stop();
+
+        formJuego.MostrarMensaje($"{jugadorDebeCantarUno.Nombre} cantó ¡UNO!");
+
+        RegistrarLog(
+            jugadorDebeCantarUno.Id,
+            "Cantó UNO"
+        );
+
+        jugadorDebeCantarUno = null;
+        esperandoUNO = false;
+
+        // Pasa al siguiente jugador
+        turnoActual = turnoPendienteUNO;
+
+        formJuego.ActualizarPantalla(
+            jugadores,
+            turnoActual,
+            cartaActual
+        );
     };
 
     formJuego.RobarClickeado += () =>
     {
+        if (esperandoUNO) return;
         Jugador jugadorEnTurno = jugadores[turnoActual];
         Carta nueva = mazo.RobarCarta();
         jugadorEnTurno.Mano.Add(nueva);
