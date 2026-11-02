@@ -5,7 +5,21 @@ using System.Windows.Forms;
 using System.Windows.Forms.Design;
 
 ApplicationConfiguration.Initialize();
-ApiService api = new ApiService();
+
+// Primero se conecta al servidor
+ClienteSocket conexion = new ClienteSocket();
+string ipServidor;
+
+using (FormConexion formConexion = new FormConexion(conexion))
+{
+    if (formConexion.ShowDialog() != DialogResult.OK)
+    {
+        return;
+    }
+    ipServidor = formConexion.IpServidor;
+}
+
+ApiService api = new ApiService(ipServidor);
 
 
 try

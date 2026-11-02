@@ -1,5 +1,6 @@
 ﻿using System.Net.Http;
 using System.Net.Http.Json;
+using System.Threading;
 
 namespace JuegoUno
 {
@@ -7,10 +8,24 @@ namespace JuegoUno
     {
         private readonly HttpClient cliente;
 
-        public ApiService()
+        public ApiService(string ipServidor)
         {
             cliente = new HttpClient();
-            cliente.BaseAddress = new Uri("http://127.0.0.1:8000/");
+            cliente.BaseAddress = new Uri($"http://{ipServidor}:8000/");
+        }
+
+        public async Task<bool> ProbarConexion()
+        {
+            try
+            {
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                var respuesta = await cliente.GetAsync("", cts.Token).ConfigureAwait(false);
+                return respuesta.IsSuccessStatusCode;
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         public async Task<Jugador> CrearJugador(string nombre)
