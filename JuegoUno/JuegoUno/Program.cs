@@ -3,45 +3,51 @@ using System;
 using System.Collections.Generic;
 using System.Windows.Forms;
 using System.Windows.Forms.Design;
+using System.Linq;
 
 ApplicationConfiguration.Initialize();
 
-// Primero se conecta al servidor
+// 1) Menú principal (Jugar / Salir)
+using (FormSetup menu = new FormSetup())
+{
+if (menu.ShowDialog() != DialogResult.OK)
+{
+return;
+}
+}
+
+// 2) Conectarse al servidor
 ClienteSocket conexion = new ClienteSocket();
 string ipServidor;
 
 using (FormConexion formConexion = new FormConexion(conexion))
 {
-    if (formConexion.ShowDialog() != DialogResult.OK)
-    {
-        return;
-    }
-    ipServidor = formConexion.IpServidor;
+if (formConexion.ShowDialog() != DialogResult.OK)
+{
+return;
+}
+ipServidor = formConexion.IpServidor;
 }
 
 ApiService api = new ApiService(ipServidor);
 
+// 3) Sala de espera
+List<JugadoraSala> jugadorasSala;
+
+using (FormSalaEspera sala = new FormSalaEspera(conexion))
+{
+if (sala.ShowDialog() != DialogResult.OK)
+{
+return;
+}
+jugadorasSala = sala.Jugadoras;
+}
 
 try
 {
-
-    FormSetup setup = new FormSetup();
-    if (setup.ShowDialog() != DialogResult.OK)
-    {
-        return;
-    }
-
-    List<int> idsJugadores = new List<int>();
-    List<string> nombresJugadores = setup.NombresJugadores;
-
-    foreach (string nombreJugador in nombresJugadores)
-    {
-        Jugador jugador = api.CrearJugador(nombreJugador)
-                             .GetAwaiter()
-                             .GetResult();
-
-        idsJugadores.Add(jugador.Id);
-    }
+    // Las jugadoras ya vienen registradas desde el servidor
+    List<int> idsJugadores = jugadorasSala.Select(j => j.Id).ToList();
+    List<string> nombresJugadores = jugadorasSala.Select(j => j.Nombre).ToList();
 
     Mazo mazo = new Mazo();
     mazo.Barajar();

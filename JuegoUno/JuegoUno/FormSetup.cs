@@ -59,7 +59,11 @@ public class FormSetup : Form
         picJugar.Cursor = Cursors.Hand;
         string rutaJugar = Path.Combine(Application.StartupPath, "Menu", "Jugar.png");
         if (File.Exists(rutaJugar)) picJugar.Image = Image.FromFile(rutaJugar);
-        picJugar.Click += (s, e) => MostrarPantallaJugadores();
+        picJugar.Click += (s, e) =>
+        {
+            this.DialogResult = DialogResult.OK;
+            this.Close();
+        };
         this.Controls.Add(picJugar);
 
         picSalir = new PictureBox();
