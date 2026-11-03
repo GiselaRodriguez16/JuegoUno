@@ -1,316 +1,85 @@
 ﻿using JuegoUno;
 using System;
-using System.Collections.Generic;
+using System.Text.Json;
 using System.Windows.Forms;
-using System.Windows.Forms.Design;
-using System.Linq;
 
 ApplicationConfiguration.Initialize();
 
-// 1) Menú principal (Jugar / Salir)
-using (FormSetup menu = new FormSetup())
-{
-if (menu.ShowDialog() != DialogResult.OK)
-{
-return;
-}
-}
-
-// 2) Conectarse al servidor
-ClienteSocket conexion = new ClienteSocket();
-string ipServidor;
-
-using (FormConexion formConexion = new FormConexion(conexion))
-{
-if (formConexion.ShowDialog() != DialogResult.OK)
-{
-return;
-}
-ipServidor = formConexion.IpServidor;
-}
-
-ApiService api = new ApiService(ipServidor);
-
-// 3) Sala de espera
-List<JugadoraSala> jugadorasSala;
-
-using (FormSalaEspera sala = new FormSalaEspera(conexion))
-{
-if (sala.ShowDialog() != DialogResult.OK)
-{
-return;
-}
-jugadorasSala = sala.Jugadoras;
-}
-
 try
 {
-    // Las jugadoras ya vienen registradas desde el servidor
-    List<int> idsJugadores = jugadorasSala.Select(j => j.Id).ToList();
-    List<string> nombresJugadores = jugadorasSala.Select(j => j.Nombre).ToList();
-
-    Mazo mazo = new Mazo();
-    mazo.Barajar();
-
-    List<Jugador> jugadores = new List<Jugador>();
-    for (int i = 0; i < idsJugadores.Count; i++)
+    // 1) Menú principal (Jugar / Salir)
+    using (FormSetup menu = new FormSetup())
     {
-        Jugador j = new Jugador { Id = idsJugadores[i], Nombre = nombresJugadores[i] };
-        for (int c = 0; c < 7; c++) j.Mano.Add(mazo.RobarCarta());
-        jugadores.Add(j);
-    }
-
-    Carta cartaActual = mazo.RobarCarta();
-    if (cartaActual.Color == "Ninguno")
-    {
-        using (var colorForm = new FormColorPicker())
+        if (menu.ShowDialog() != DialogResult.OK)
         {
-            colorForm.ShowDialog();
-            cartaActual.Color = colorForm.ColorElegido ?? "Rojo";
+            return;
         }
     }
 
-    int idPartida = api.CrearPartida()
-                    .GetAwaiter()
-                    .GetResult();
+    // 2) Conectarse al servidor
+    ClienteSocket conexion = new ClienteSocket();
 
-
-    int turnoActual = 0;
-    int direccion = 1;
-    Jugador jugadorDebeCantarUno = null;
-
-    
-
-    void RegistrarLog(int idJugadorLog, string movimiento)
+    using (FormConexion formConexion = new FormConexion(conexion))
     {
-        api.RegistrarLog(
-            idPartida,
-            idJugadorLog,
-            movimiento
-        ).GetAwaiter().GetResult();
-    }
-
-
-    void GuardarHistorial(Jugador ganador)
-    {
-        foreach (var j in jugadores)
+        if (formConexion.ShowDialog() != DialogResult.OK)
         {
-            string resultado = (j.Id == ganador.Id)
-                ? "Ganada"
-                : "Perdida";
-
-            api.GuardarHistorial(
-                idPartida,
-                j.Id,
-                resultado
-            ).GetAwaiter().GetResult();
+            return;
         }
     }
 
+    // 3) Sala de espera
+    int miId;
 
+    using (FormSalaEspera sala = new FormSalaEspera(conexion))
+    {
+        if (sala.ShowDialog() != DialogResult.OK)
+        {
+            return;
+        }
+        miId = sala.MiId;
+    }
+
+    // 4) Juego: el servidor manda el estado y esta pantalla solo lo dibuja
     FormJuego formJuego = new FormJuego();
 
-    // Control del tiempo para cantar UNO
-    bool esperandoUNO = false;
-    int turnoPendienteUNO = 0;
-    int segundosUNO = 15;
-
-    // Temporizador invisible
-    System.Windows.Forms.Timer timerUNO = new System.Windows.Forms.Timer();
-
-    timerUNO.Interval = 1000; // Un segundo
-
-    timerUNO.Tick += (s, e) =>
+    conexion.MensajeRecibido += (mensaje) =>
     {
-        segundosUNO--;
-
-        if (segundosUNO <= 0)
+        try
         {
-            timerUNO.Stop();
+            string tipo = mensaje.GetProperty("tipo").GetString();
 
-            // El jugador olvidó cantar UNO: roba una carta
-            if (jugadorDebeCantarUno != null)
+            if (tipo == "estado")
             {
-                jugadorDebeCantarUno.Mano.Add(mazo.RobarCarta());
-
-                RegistrarLog(
-                    jugadorDebeCantarUno.Id,
-                    "No cantó UNO: robó una carta de penalización"
-                );
+                EstadoJuego estado = EstadoJuego.DesdeJson(mensaje, miId);
+                formJuego.EnPantalla(() => formJuego.MostrarEstado(estado));
             }
-
-            jugadorDebeCantarUno = null;
-            esperandoUNO = false;
-
-            // Pasa al siguiente jugador
-            turnoActual = turnoPendienteUNO;
-
-            formJuego.ActualizarPantalla(
-                jugadores,
-                turnoActual,
-                cartaActual
-            );
-        }
-    };
-
-    formJuego.CartaClickeada += (indice) =>
-    {
-        if (esperandoUNO) return;
-        Jugador jugadorEnTurno = jugadores[turnoActual];
-
-        if (indice < 0 || indice >= jugadorEnTurno.Mano.Count) return;
-
-        Carta cartaElegida = jugadorEnTurno.Mano[indice];
-
-        if (!cartaElegida.EsValidaSobre(cartaActual))
-        {
-            formJuego.MostrarMensaje("❌ Esa carta no es válida.");
-            return;
-        }
-
-        jugadorEnTurno.Mano.RemoveAt(indice);
-
-        if (jugadorEnTurno.Mano.Count == 1)
-        {
-            jugadorDebeCantarUno = jugadorEnTurno;
-        }
-        else
-        {
-            jugadorDebeCantarUno = null;
-        }
-
-        if (cartaElegida.Color == "Ninguno")
-        {
-            using (var colorForm = new FormColorPicker())
+            else if (tipo == "error")
             {
-                colorForm.ShowDialog();
-                cartaElegida.Color = colorForm.ColorElegido ?? "Rojo";
+                string texto = mensaje.GetProperty("mensaje").GetString();
+                formJuego.EnPantalla(() => formJuego.MostrarAviso("⚠️ " + texto));
             }
-            formJuego.MostrarUltimaAccion($"{jugadorEnTurno.Nombre} eligió el color {cartaElegida.Color}");
-           
         }
-
-        cartaActual = cartaElegida;
-        RegistrarLog(jugadorEnTurno.Id, $"Tiró {cartaElegida}");
-
-        if (jugadorEnTurno.Mano.Count == 0)
+        catch (Exception ex)
         {
-            RegistrarLog(jugadorEnTurno.Id, "Ganó la partida");
-            GuardarHistorial(jugadorEnTurno);
-            formJuego.MostrarGanador(jugadorEnTurno.Nombre);
-            formJuego.Close();
-            return;
+            formJuego.EnPantalla(() => formJuego.MostrarAviso("Error al leer mensaje: " + ex.Message));
         }
-
-        int siguienteTurno = (turnoActual + direccion + jugadores.Count) % jugadores.Count;
-
-        switch (cartaElegida.Tipo)
-        {
-            case "Salta":
-                siguienteTurno = (siguienteTurno + direccion + jugadores.Count) % jugadores.Count;
-                break;
-
-            case "Reversa":
-                direccion *= -1;
-                siguienteTurno = (turnoActual + direccion + jugadores.Count) % jugadores.Count;
-                break;
-
-            case "Mas2":
-                Jugador victima2 = jugadores[siguienteTurno];
-                for (int k = 0; k < 2; k++) victima2.Mano.Add(mazo.RobarCarta());
-                RegistrarLog(victima2.Id, "Robó 2 cartas (por +2)");
-                siguienteTurno = (siguienteTurno + direccion + jugadores.Count) % jugadores.Count;
-                break;
-
-            case "Mas4":
-                Jugador victima4 = jugadores[siguienteTurno];
-                for (int k = 0; k < 4; k++) victima4.Mano.Add(mazo.RobarCarta());
-                RegistrarLog(victima4.Id, "Robó 4 cartas (por +4)");
-                siguienteTurno = (siguienteTurno + direccion + jugadores.Count) % jugadores.Count;
-                break;
-        }
-
-        // Si se quedó con una sola carta, debe cantar UNO
-        if (jugadorEnTurno.Mano.Count == 1)
-        {
-            jugadorDebeCantarUno = jugadorEnTurno;
-            turnoPendienteUNO = siguienteTurno;
-            esperandoUNO = true;
-            segundosUNO = 15;
-
-            timerUNO.Start();
-
-            // Todavía no avanza el turno
-            formJuego.ActualizarPantalla(
-                jugadores,
-                turnoActual,
-                cartaActual
-            );
-
-            return;
-        }
-
-        // Si no tiene una sola carta, pasa normalmente
-        jugadorDebeCantarUno = null;
-
-        turnoActual = siguienteTurno;
-
-        formJuego.ActualizarPantalla(
-            jugadores,
-            turnoActual,
-            cartaActual
-        );
-
-        formJuego.ForzarRepintado();
     };
 
-    formJuego.UnoClickeado += () =>
-    {
-        // Solo se puede cantar UNO durante la espera
-        if (!esperandoUNO || jugadorDebeCantarUno == null)
-        {
-            return;
-        }
+    conexion.Desconectado += () =>
+        formJuego.EnPantalla(() => formJuego.MostrarAviso(" Se perdió la conexión con el servidor."));
 
-        timerUNO.Stop();
+    // Por ahora solo se muestra la partida. Tirar, robar y UNO se programan en los siguientes commits.
+    formJuego.CartaClickeada += (indice) => formJuego.MostrarAviso("Tirar cartas se activa en el siguiente commit ");
+    formJuego.RobarClickeado += () => formJuego.MostrarAviso("Robar se activa en un siguiente commit ");
+    formJuego.UnoClickeado += () => formJuego.MostrarAviso("El botón UNO se activa en un siguiente commit ");
 
-        formJuego.MostrarMensaje($"{jugadorDebeCantarUno.Nombre} cantó ¡UNO!");
+    // Cuando la ventana ya está abierta, le pide al servidor su estado
+    formJuego.Shown += async (s, e) => await conexion.EnviarAsync(new { tipo = "listo" });
 
-        RegistrarLog(
-            jugadorDebeCantarUno.Id,
-            "Cantó UNO"
-        );
-
-        jugadorDebeCantarUno = null;
-        esperandoUNO = false;
-
-        // Pasa al siguiente jugador
-        turnoActual = turnoPendienteUNO;
-
-        formJuego.ActualizarPantalla(
-            jugadores,
-            turnoActual,
-            cartaActual
-        );
-    };
-
-    formJuego.RobarClickeado += () =>
-    {
-        if (esperandoUNO) return;
-        Jugador jugadorEnTurno = jugadores[turnoActual];
-        Carta nueva = mazo.RobarCarta();
-        jugadorEnTurno.Mano.Add(nueva);
-        RegistrarLog(jugadorEnTurno.Id, "Robó una carta");
-
-        turnoActual = (turnoActual + direccion + jugadores.Count) % jugadores.Count;
-        formJuego.ActualizarPantalla(jugadores, turnoActual, cartaActual);
-    };
-
-    formJuego.ActualizarPantalla(jugadores, turnoActual, cartaActual);
     Application.Run(formJuego);
+    conexion.Cerrar();
 }
 catch (Exception ex)
 {
     MessageBox.Show("Error: " + ex.Message);
 }
-
