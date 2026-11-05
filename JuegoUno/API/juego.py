@@ -36,6 +36,19 @@ def texto_carta(carta):
     return f'{carta["color"]} {carta["tipo"]}'
 
 
+def es_valida(carta, actual):                          
+    """Las mismas reglas que Carta.EsValidaSobre en C#."""
+    if carta["color"] == "Ninguno":                    # Comodines siempre se pueden tirar
+        return True
+    if carta["color"] == actual["color"]:              # Mismo color
+        return True
+    if carta["tipo"] == "Numero" and actual["tipo"] == "Numero" and carta["numero"] == actual["numero"]:
+        return True                                    # Mismo número
+    if carta["tipo"] != "Numero" and carta["tipo"] == actual["tipo"]:
+        return True                                    # Misma carta especial (ej. Salta sobre Salta)
+    return False
+
+
 class Partida:
     """Todo el estado de una partida. Solo el servidor lo modifica."""
 
@@ -48,6 +61,7 @@ class Partida:
         self.manos = {j["id"]: [] for j in jugadoras}    # id de jugadora -> lista de cartas
         self.turno = 0                                   # Posición en self.jugadoras
         self.direccion = 1                               # 1 = normal, -1 = reversa
+        self.ultima_accion = "¡Empieza la partida!"      # Se muestra a todas
         self.repartir()
 
     def robar(self):
@@ -75,6 +89,41 @@ class Partida:
     def id_turno(self):
         return self.jugadoras[self.turno]["id"]
 
+    def nombre_de(self, id_jugador):                   
+        for j in self.jugadoras:
+            if j["id"] == id_jugador:
+                return j["nombre"]
+        return "?"
+
+    def siguiente_turno(self):                         
+        """Pasa el turno a la siguiente jugadora según la dirección."""
+        self.turno = (self.turno + self.direccion) % len(self.jugadoras)
+
+    def tirar(self, id_jugador, indice):               
+        """Intenta tirar una carta. Regresa None si salió bien, o un texto con el error."""
+        if id_jugador != self.id_turno():
+            return "No es tu turno."
+
+        mano = self.manos[id_jugador]
+        if not (0 <= indice < len(mano)):
+            return "Esa carta no existe."
+
+        carta = mano[indice]
+
+        if carta["color"] == "Ninguno":
+            return "Los comodines todavía no están disponibles."   # Se activan en el commit #6
+
+        if not es_valida(carta, self.carta_actual):
+            return f"No puedes tirar {texto_carta(carta)} sobre {texto_carta(self.carta_actual)}."
+
+        mano.pop(indice)
+        self.descarte.append(carta)
+        self.ultima_accion = f"{self.nombre_de(id_jugador)} tiró {texto_carta(carta)}"
+
+        # Los efectos de Salta, Reversa y +2 se programan en el commit #5
+        self.siguiente_turno()
+        return None
+
     def estado_para(self, id_jugador):
         """Lo que ve UNA jugadora: su mano completa y de las demás solo cuántas cartas tienen."""
         return {
@@ -87,4 +136,5 @@ class Partida:
             ],
             "turno": self.id_turno(),
             "direccion": self.direccion,
+            "ultimaAccion": self.ultima_accion,        
         }

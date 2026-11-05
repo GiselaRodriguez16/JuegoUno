@@ -191,6 +191,27 @@ def procesar_mensaje(conexion, datos):
             estado = partida.estado_para(jugadoras[conexion]["id"])
         enviar(conexion, estado)
 
+        elif tipo == "tirar":                            # NUEVO (#4)
+        with candado:
+            if partida is None or conexion not in jugadoras:
+                return
+            id_jugador = jugadoras[conexion]["id"]
+            try:
+                indice = int(datos.get("indice", -1))
+            except (TypeError, ValueError):
+                indice = -1
+            error = partida.tirar(id_jugador, indice)
+            accion = partida.ultima_accion
+            id_partida = partida.id
+
+        if error:
+            enviar(conexion, {"tipo": "error", "mensaje": error})
+            return
+
+        print(f"[juego] {accion}")
+        registrar_log(id_partida, id_jugador, accion)
+        enviar_estado_a_todas()
+
     else:
         print(f"[?] Mensaje desconocido: {datos}")
 

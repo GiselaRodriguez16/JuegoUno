@@ -42,6 +42,8 @@ try
     // 4) Juego: el servidor manda el estado y esta pantalla solo lo dibuja
     FormJuego formJuego = new FormJuego();
 
+    EstadoJuego estadoActual = null;   // El último estado que mandó el servidor
+
     conexion.MensajeRecibido += (mensaje) =>
     {
         try
@@ -51,7 +53,11 @@ try
             if (tipo == "estado")
             {
                 EstadoJuego estado = EstadoJuego.DesdeJson(mensaje, miId);
-                formJuego.EnPantalla(() => formJuego.MostrarEstado(estado));
+                formJuego.EnPantalla(() =>
+                {
+                    estadoActual = estado;
+                    formJuego.MostrarEstado(estado);
+                });
             }
             else if (tipo == "error")
             {
@@ -69,7 +75,26 @@ try
         formJuego.EnPantalla(() => formJuego.MostrarAviso(" Se perdió la conexión con el servidor."));
 
     // Por ahora solo se muestra la partida. Tirar, robar y UNO se programan en los siguientes commits.
-    formJuego.CartaClickeada += (indice) => formJuego.MostrarAviso("Tirar cartas se activa en el siguiente commit ");
+    // Tirar carta: se manda al servidor y él decide si es válida
+    formJuego.CartaClickeada += async (indice) =>
+    {
+        if (estadoActual == null) return;
+
+        if (estadoActual.Turno != estadoActual.MiId)
+        {
+            formJuego.MostrarAviso("⏳ No es tu turno.");
+            return;
+        }
+
+        try
+        {
+            await conexion.EnviarAsync(new { tipo = "tirar", indice = indice });
+        }
+        catch
+        {
+            formJuego.MostrarAviso("❌ No se pudo enviar la jugada.");
+        }
+    };
     formJuego.RobarClickeado += () => formJuego.MostrarAviso("Robar se activa en un siguiente commit ");
     formJuego.UnoClickeado += () => formJuego.MostrarAviso("El botón UNO se activa en un siguiente commit ");
 
