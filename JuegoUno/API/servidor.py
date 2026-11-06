@@ -111,6 +111,26 @@ def enviar_estado_a_todas():                         # NUEVO (#3)
             except OSError:
                 pass
 
+def ejecutar_jugada(conexion, jugada):                 # NUEVO (#5)
+    """Hace una jugada (tirar, robar...) de forma segura y avisa a todas.
+    'jugada' es una función que recibe (partida, id_jugadora) y regresa None o un texto de error."""
+    with candado:
+        if partida is None or conexion not in jugadoras:
+            return
+        id_jugador = jugadoras[conexion]["id"]
+        error = jugada(partida, id_jugador)
+        accion = partida.ultima_accion
+        id_partida = partida.id
+        logs = partida.sacar_logs()
+
+    if error:
+        enviar(conexion, {"tipo": "error", "mensaje": error})
+        return
+
+    print(f"[juego] {accion}")
+    for id_j, texto in logs:
+        registrar_log(id_partida, id_j, texto)
+    enviar_estado_a_todas()
 
 def procesar_mensaje(conexion, datos):
     """Decide qué hacer según el tipo de mensaje que mandó la jugadora."""
@@ -191,26 +211,15 @@ def procesar_mensaje(conexion, datos):
             estado = partida.estado_para(jugadoras[conexion]["id"])
         enviar(conexion, estado)
 
-        elif tipo == "tirar":                            # NUEVO (#4)
-        with candado:
-            if partida is None or conexion not in jugadoras:
-                return
-            id_jugador = jugadoras[conexion]["id"]
-            try:
-                indice = int(datos.get("indice", -1))
-            except (TypeError, ValueError):
-                indice = -1
-            error = partida.tirar(id_jugador, indice)
-            accion = partida.ultima_accion
-            id_partida = partida.id
+    elif tipo == "tirar":
+        try:
+            indice = int(datos.get("indice", -1))
+        except (TypeError, ValueError):
+            indice = -1
+        ejecutar_jugada(conexion, lambda p, id_j: p.tirar(id_j, indice))
 
-        if error:
-            enviar(conexion, {"tipo": "error", "mensaje": error})
-            return
-
-        print(f"[juego] {accion}")
-        registrar_log(id_partida, id_jugador, accion)
-        enviar_estado_a_todas()
+    elif tipo == "robar":                            # NUEVO (#5)
+        ejecutar_jugada(conexion, lambda p, id_j: p.robar_carta(id_j))
 
     else:
         print(f"[?] Mensaje desconocido: {datos}")

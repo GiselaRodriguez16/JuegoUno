@@ -95,7 +95,28 @@ try
             formJuego.MostrarAviso("❌ No se pudo enviar la jugada.");
         }
     };
-    formJuego.RobarClickeado += () => formJuego.MostrarAviso("Robar se activa en un siguiente commit ");
+
+    // Robar carta: se pide al servidor
+    formJuego.RobarClickeado += async () =>
+    {
+        if (estadoActual == null) return;
+
+        if (estadoActual.Turno != estadoActual.MiId)
+        {
+            formJuego.MostrarAviso("⏳ No es tu turno.");
+            return;
+        }
+
+        try
+        {
+            await conexion.EnviarAsync(new { tipo = "robar" });
+        }
+        catch
+        {
+            formJuego.MostrarAviso("❌ No se pudo enviar la jugada.");
+        }
+    };
+
     formJuego.UnoClickeado += () => formJuego.MostrarAviso("El botón UNO se activa en un siguiente commit ");
 
     // Cuando la ventana ya está abierta, le pide al servidor su estado

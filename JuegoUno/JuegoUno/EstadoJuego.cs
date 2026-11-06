@@ -20,6 +20,9 @@ namespace JuegoUno
         public List<JugadoraEstado> Jugadoras { get; set; } = new List<JugadoraEstado>();
         public int Turno { get; set; }        // Id de la jugadora en turno
         public int Direccion { get; set; }
+        public string UltimaAccion { get; set; }   // Ej: "Gis tiró Rojo 5"
+        public int CartasEnMazo { get; set; }
+
 
         private static readonly JsonSerializerOptions opciones = new JsonSerializerOptions
         {

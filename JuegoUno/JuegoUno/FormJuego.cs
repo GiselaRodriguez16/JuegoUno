@@ -16,6 +16,8 @@ public class FormJuego : Form
     private PictureBox picMazo;
     private PictureBox picUno;
     private FlowLayoutPanel panelMano;
+    private System.Windows.Forms.Label lblMazo;
+    private System.Windows.Forms.Label lblSentido;
 
     // Guarda las imágenes ya cargadas para no abrir el archivo cada vez que se redibuja
     private readonly Dictionary<string, Image> cacheImagenes = new Dictionary<string, Image>();
@@ -86,6 +88,24 @@ public class FormJuego : Form
         picUno.Click += (s, e) => UnoClickeado?.Invoke();
         this.Controls.Add(picUno);
 
+        // Cuántas cartas quedan en el mazo
+        lblMazo = new System.Windows.Forms.Label();
+        lblMazo.Text = "";
+        lblMazo.ForeColor = Color.White;
+        lblMazo.Font = new Font("Arial", 10, FontStyle.Bold);
+        lblMazo.Location = new Point(600, 412);
+        lblMazo.AutoSize = true;
+        this.Controls.Add(lblMazo);
+
+        // Sentido del juego
+        lblSentido = new System.Windows.Forms.Label();
+        lblSentido.Text = "";
+        lblSentido.ForeColor = Color.White;
+        lblSentido.Font = new Font("Arial", 12, FontStyle.Bold);
+        lblSentido.Location = new Point(750, 390);
+        lblSentido.AutoSize = true;
+        this.Controls.Add(lblSentido);
+
         lblMisCartas = new System.Windows.Forms.Label();
         lblMisCartas.Text = "Tus cartas";
         lblMisCartas.Font = new Font("Arial", 12, FontStyle.Bold);
@@ -121,6 +141,7 @@ public class FormJuego : Form
     }
 
     // Dibuja la mesa tal como la manda el servidor
+    // Dibuja la mesa tal como la manda el servidor
     public void MostrarEstado(EstadoJuego estado)
     {
         bool esMiTurno = estado.Turno == estado.MiId;
@@ -128,6 +149,9 @@ public class FormJuego : Form
         string miNombre = estado.Jugadoras.FirstOrDefault(j => j.Id == estado.MiId)?.Nombre ?? "";
 
         lblTurno.Text = esMiTurno ? "¡Es tu turno!" : $"Turno de: {nombreTurno}";
+
+        // Última jugada, la ven todas (ej. "Gis tiró Rojo 5")
+        lblAviso.Text = estado.UltimaAccion ?? "";
 
         // Carta del centro
         LimpiarPanel(panelCartaActual);
@@ -160,15 +184,61 @@ public class FormJuego : Form
             panelJugadoresArriba.Controls.Add(filaCartas);
         }
 
-        // Mi mano
-        lblMisCartas.Text = $"Tus cartas ({miNombre})";
+        // Mi mano: solo se puede dar clic si es mi turno
+        if (esMiTurno)
+        {
+            lblMisCartas.Text = $"Tus cartas ({miNombre}) – elige una carta";
+            lblMisCartas.BackColor = Color.Gold;
+        }
+        else
+        {
+            lblMisCartas.Text = $"Tus cartas ({miNombre}) – espera tu turno";
+            lblMisCartas.BackColor = Color.LightPink;
+        }
+
         LimpiarPanel(panelMano);
         for (int i = 0; i < estado.MiMano.Count; i++)
         {
             int indice = i;
-            panelMano.Controls.Add(
-                CrearCartaVisual(estado.MiMano[i].NombreImagen(), (s, e) => CartaClickeada?.Invoke(indice))
-            );
+            Carta carta = estado.MiMano[i];
+
+            EventHandler clic = null;
+            if (esMiTurno)
+            {
+                clic = (s, e) => CartaClickeada?.Invoke(indice);
+            }
+
+            PictureBox pic = CrearCartaVisual(carta.NombreImagen(), clic);
+
+            // Borde dorado en las cartas que sí se pueden tirar
+            // (los comodines se excluyen hasta el commit #6)
+            if (esMiTurno && carta.Color != "Ninguno" && carta.EsValidaSobre(estado.CartaActual))
+            {
+                pic.BackColor = Color.Gold;
+                pic.Padding = new Padding(4);
+            }
+
+            panelMano.Controls.Add(pic);
+        }
+
+        // Mazo y sentido del juego
+        lblMazo.Text = $"Mazo: {estado.CartasEnMazo}";
+        lblSentido.Text = estado.Direccion == 1 ? "Sentido: →" : "Sentido: ←";
+
+        // Si es mi turno y no tengo ninguna carta válida, el mazo se ilumina
+        // (los comodines se excluyen hasta el commit #6)
+        bool puedoTirarAlgo = estado.MiMano.Any(c => c.Color != "Ninguno" && c.EsValidaSobre(estado.CartaActual));
+
+        if (esMiTurno && !puedoTirarAlgo)
+        {
+            picMazo.BackColor = Color.Gold;
+            picMazo.Padding = new Padding(4);
+            lblMazo.Text += "   ¡Roba!";
+        }
+        else
+        {
+            picMazo.BackColor = ColoresJuego.FondoVentana;
+            picMazo.Padding = new Padding(0);
         }
     }
 

@@ -36,7 +36,7 @@ def texto_carta(carta):
     return f'{carta["color"]} {carta["tipo"]}'
 
 
-def es_valida(carta, actual):                          
+def es_valida(carta, actual):
     """Las mismas reglas que Carta.EsValidaSobre en C#."""
     if carta["color"] == "Ninguno":                    # Comodines siempre se pueden tirar
         return True
@@ -62,12 +62,38 @@ class Partida:
         self.turno = 0                                   # Posición en self.jugadoras
         self.direccion = 1                               # 1 = normal, -1 = reversa
         self.ultima_accion = "¡Empieza la partida!"      # Se muestra a todas
+        self.logs_pendientes = []                        # NUEVO (#5): (id_jugadora, texto) para LogJuego
         self.repartir()
+
+    # ---------- Log ----------
+
+    def anotar(self, id_jugador, texto):               # NUEVO (#5)
+        """Guarda un movimiento para que el servidor lo mande a LogJuego."""
+        self.logs_pendientes.append((id_jugador, texto))
+
+    def sacar_logs(self):                              # NUEVO (#5)
+        """Entrega los movimientos pendientes y vacía la lista."""
+        logs = self.logs_pendientes
+        self.logs_pendientes = []
+        return logs
+
+    # ---------- Mazo ----------
 
     def robar(self):
         if not self.mazo:
             raise RuntimeError("El mazo está vacío")     # Rebarajar se programa en el commit #6
         return self.mazo.pop()
+
+    def robar_varias(self, id_jugador, cantidad):      # NUEVO (#5)
+        """Le da 'cantidad' cartas a una jugadora (o las que queden si se acaba el mazo)."""
+        robadas = 0
+        for _ in range(cantidad):
+            try:
+                self.manos[id_jugador].append(self.robar())
+                robadas += 1
+            except RuntimeError:
+                break
+        return robadas
 
     def repartir(self):
         # 7 cartas a cada una, una por una como en el juego real
@@ -82,6 +108,8 @@ class Partida:
             carta = self.robar()
         self.descarte.append(carta)
 
+    # ---------- Turnos ----------
+
     @property
     def carta_actual(self):
         return self.descarte[-1]
@@ -89,17 +117,19 @@ class Partida:
     def id_turno(self):
         return self.jugadoras[self.turno]["id"]
 
-    def nombre_de(self, id_jugador):                   
+    def nombre_de(self, id_jugador):
         for j in self.jugadoras:
             if j["id"] == id_jugador:
                 return j["nombre"]
         return "?"
 
-    def siguiente_turno(self):                         
+    def siguiente_turno(self):
         """Pasa el turno a la siguiente jugadora según la dirección."""
         self.turno = (self.turno + self.direccion) % len(self.jugadoras)
 
-    def tirar(self, id_jugador, indice):               
+    # ---------- Jugadas ----------
+
+    def tirar(self, id_jugador, indice):
         """Intenta tirar una carta. Regresa None si salió bien, o un texto con el error."""
         if id_jugador != self.id_turno():
             return "No es tu turno."
@@ -119,10 +149,58 @@ class Partida:
         mano.pop(indice)
         self.descarte.append(carta)
         self.ultima_accion = f"{self.nombre_de(id_jugador)} tiró {texto_carta(carta)}"
+        self.anotar(id_jugador, f"Tiró {texto_carta(carta)}")       # NUEVO (#5)
 
-        # Los efectos de Salta, Reversa y +2 se programan en el commit #5
+        self.aplicar_efecto(id_jugador, carta)                       # NUEVO (#5)
+        return None
+
+    def aplicar_efecto(self, id_jugador, carta):       # NUEVO (#5)
+        """Aplica el efecto de la carta tirada y decide de quién es el siguiente turno."""
+        tipo = carta["tipo"]
+
+        if tipo == "Salta":
+            self.siguiente_turno()                       # La siguiente...
+            saltada = self.id_turno()
+            self.siguiente_turno()                       # ...se brinca
+            self.ultima_accion += f" → {self.nombre_de(saltada)} pierde su turno"
+            self.anotar(saltada, "Perdió su turno (por Salta)")
+
+        elif tipo == "Reversa":
+            self.direccion *= -1
+            self.anotar(id_jugador, "Cambió el sentido del juego")
+            if len(self.jugadoras) == 2:
+                # Con 2 jugadoras, Reversa funciona como Salta: vuelve a tirar la misma
+                self.ultima_accion += " → cambia el sentido y vuelve a tirar"
+            else:
+                self.siguiente_turno()
+                self.ultima_accion += " → cambia el sentido del juego"
+
+        elif tipo == "Mas2":
+            self.siguiente_turno()                       # La víctima es la siguiente
+            victima = self.id_turno()
+            robadas = self.robar_varias(victima, 2)
+            self.siguiente_turno()                       # ...y pierde su turno
+            self.ultima_accion += f" → {self.nombre_de(victima)} roba {robadas} y pierde su turno"
+            self.anotar(victima, f"Robó {robadas} cartas (por +2)")
+
+        else:
+            # Carta de número: turno normal
+            self.siguiente_turno()
+
+    def robar_carta(self, id_jugador):                 # NUEVO (#5)
+        """La jugadora en turno roba una carta y el turno pasa a la siguiente."""
+        if id_jugador != self.id_turno():
+            return "No es tu turno."
+
+        if self.robar_varias(id_jugador, 1) == 0:
+            return "Ya no hay cartas en el mazo."
+
+        self.ultima_accion = f"{self.nombre_de(id_jugador)} robó una carta"
+        self.anotar(id_jugador, "Robó una carta")
         self.siguiente_turno()
         return None
+
+    # ---------- Lo que ve cada jugadora ----------
 
     def estado_para(self, id_jugador):
         """Lo que ve UNA jugadora: su mano completa y de las demás solo cuántas cartas tienen."""
@@ -136,5 +214,6 @@ class Partida:
             ],
             "turno": self.id_turno(),
             "direccion": self.direccion,
-            "ultimaAccion": self.ultima_accion,        
+            "ultimaAccion": self.ultima_accion,
+            "cartasEnMazo": len(self.mazo),              # NUEVO (#5)
         }
