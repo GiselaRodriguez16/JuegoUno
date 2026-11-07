@@ -211,12 +211,13 @@ def procesar_mensaje(conexion, datos):
             estado = partida.estado_para(jugadoras[conexion]["id"])
         enviar(conexion, estado)
 
-    elif tipo == "tirar":
+        elif tipo == "tirar":
         try:
             indice = int(datos.get("indice", -1))
         except (TypeError, ValueError):
             indice = -1
-        ejecutar_jugada(conexion, lambda p, id_j: p.tirar(id_j, indice))
+        color = datos.get("color")                   # NUEVO (#6): solo se usa en comodines
+        ejecutar_jugada(conexion, lambda p, id_j: p.tirar(id_j, indice, color))
 
     elif tipo == "robar":                            # NUEVO (#5)
         ejecutar_jugada(conexion, lambda p, id_j: p.robar_carta(id_j))

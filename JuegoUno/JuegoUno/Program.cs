@@ -86,9 +86,29 @@ try
             return;
         }
 
+        if (indice < 0 || indice >= estadoActual.MiMano.Count) return;
+        Carta carta = estadoActual.MiMano[indice];
+
+        // Si es Comodín o +4, primero se elige el color
+        string color = null;
+        if (carta.Color == "Ninguno")
+        {
+            using (FormColorPicker selector = new FormColorPicker())
+            {
+                selector.ShowDialog(formJuego);
+                color = selector.ColorElegido;
+            }
+
+            if (color == null)
+            {
+                formJuego.MostrarAviso("Elige un color para tirar el comodín.");
+                return;
+            }
+        }
+
         try
         {
-            await conexion.EnviarAsync(new { tipo = "tirar", indice = indice });
+            await conexion.EnviarAsync(new { tipo = "tirar", indice = indice, color = color });
         }
         catch
         {

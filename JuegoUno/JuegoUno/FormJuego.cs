@@ -18,6 +18,7 @@ public class FormJuego : Form
     private FlowLayoutPanel panelMano;
     private System.Windows.Forms.Label lblMazo;
     private System.Windows.Forms.Label lblSentido;
+    private System.Windows.Forms.Label lblColorElegido;
 
     // Guarda las imágenes ya cargadas para no abrir el archivo cada vez que se redibuja
     private readonly Dictionary<string, Image> cacheImagenes = new Dictionary<string, Image>();
@@ -106,6 +107,16 @@ public class FormJuego : Form
         lblSentido.AutoSize = true;
         this.Controls.Add(lblSentido);
 
+        // Color elegido cuando en el centro hay un comodín (la imagen es negra)
+        lblColorElegido = new System.Windows.Forms.Label();
+        lblColorElegido.Text = "";
+        lblColorElegido.Font = new Font("Arial", 10, FontStyle.Bold);
+        lblColorElegido.Location = new Point(450, 415);
+        lblColorElegido.AutoSize = true;
+        lblColorElegido.Padding = new Padding(4, 2, 4, 2);
+        lblColorElegido.Visible = false;
+        this.Controls.Add(lblColorElegido);
+
         lblMisCartas = new System.Windows.Forms.Label();
         lblMisCartas.Text = "Tus cartas";
         lblMisCartas.Font = new Font("Arial", 12, FontStyle.Bold);
@@ -156,6 +167,23 @@ public class FormJuego : Form
         // Carta del centro
         LimpiarPanel(panelCartaActual);
         panelCartaActual.Controls.Add(CrearCartaVisual(estado.CartaActual.NombreImagen(), null));
+
+
+        // Si en el centro hay un comodín, se muestra el color que eligieron
+        string colorCentro = estado.CartaActual.Color;
+        bool centroEsComodin = estado.CartaActual.Tipo == "Comodin" || estado.CartaActual.Tipo == "Mas4";
+
+        if (centroEsComodin && ColoresJuego.Cartas.ContainsKey(colorCentro) && colorCentro != "Ninguno")
+        {
+            lblColorElegido.Text = $"Color: {colorCentro}";
+            lblColorElegido.BackColor = ColoresJuego.Cartas[colorCentro];
+            lblColorElegido.ForeColor = colorCentro == "Rojo" ? Color.White : Color.Black;
+            lblColorElegido.Visible = true;
+        }
+        else
+        {
+            lblColorElegido.Visible = false;
+        }
 
         // Las demás jugadoras: solo el reverso y cuántas cartas tienen
         LimpiarPanel(panelJugadoresArriba);
@@ -211,8 +239,7 @@ public class FormJuego : Form
             PictureBox pic = CrearCartaVisual(carta.NombreImagen(), clic);
 
             // Borde dorado en las cartas que sí se pueden tirar
-            // (los comodines se excluyen hasta el commit #6)
-            if (esMiTurno && carta.Color != "Ninguno" && carta.EsValidaSobre(estado.CartaActual))
+            if (esMiTurno && carta.EsValidaSobre(estado.CartaActual))
             {
                 pic.BackColor = Color.Gold;
                 pic.Padding = new Padding(4);
@@ -226,8 +253,7 @@ public class FormJuego : Form
         lblSentido.Text = estado.Direccion == 1 ? "Sentido: →" : "Sentido: ←";
 
         // Si es mi turno y no tengo ninguna carta válida, el mazo se ilumina
-        // (los comodines se excluyen hasta el commit #6)
-        bool puedoTirarAlgo = estado.MiMano.Any(c => c.Color != "Ninguno" && c.EsValidaSobre(estado.CartaActual));
+        bool puedoTirarAlgo = estado.MiMano.Any(c => c.EsValidaSobre(estado.CartaActual));
 
         if (esMiTurno && !puedoTirarAlgo)
         {

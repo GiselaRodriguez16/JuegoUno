@@ -29,10 +29,19 @@ def crear_mazo():
     return mazo
 
 
+def es_comodin(carta):                                 # NUEVO (#6)
+    return carta["tipo"] in ("Comodin", "Mas4")
+
+
 def texto_carta(carta):
-    """Texto legible de una carta, para el log. Ej: 'Rojo 5', 'Azul Salta'."""
+    """Texto legible de una carta, para el log. Ej: 'Rojo 5', 'Azul Salta', 'Comodín (Verde)'."""
     if carta["tipo"] == "Numero":
         return f'{carta["color"]} {carta["numero"]}'
+    if es_comodin(carta):                              # NUEVO (#6)
+        nombre = "Comodín" if carta["tipo"] == "Comodin" else "+4"
+        if carta["color"] in COLORES:
+            return f'{nombre} ({carta["color"]})'
+        return nombre
     return f'{carta["color"]} {carta["tipo"]}'
 
 
@@ -62,16 +71,17 @@ class Partida:
         self.turno = 0                                   # Posición en self.jugadoras
         self.direccion = 1                               # 1 = normal, -1 = reversa
         self.ultima_accion = "¡Empieza la partida!"      # Se muestra a todas
-        self.logs_pendientes = []                        # NUEVO (#5): (id_jugadora, texto) para LogJuego
+        self.logs_pendientes = []                        # (id_jugadora, texto) para LogJuego
+        self.hubo_rebarajo = False                       # NUEVO (#6)
         self.repartir()
 
     # ---------- Log ----------
 
-    def anotar(self, id_jugador, texto):               # NUEVO (#5)
+    def anotar(self, id_jugador, texto):
         """Guarda un movimiento para que el servidor lo mande a LogJuego."""
         self.logs_pendientes.append((id_jugador, texto))
 
-    def sacar_logs(self):                              # NUEVO (#5)
+    def sacar_logs(self):
         """Entrega los movimientos pendientes y vacía la lista."""
         logs = self.logs_pendientes
         self.logs_pendientes = []
@@ -79,13 +89,30 @@ class Partida:
 
     # ---------- Mazo ----------
 
+    def rebarajar(self):                               # NUEVO (#6)
+        """Cuando se acaba el mazo: las cartas tiradas (menos la del centro) se barajan y vuelven al mazo."""
+        if len(self.descarte) <= 1:
+            return False
+
+        centro = self.descarte.pop()
+        for carta in self.descarte:
+            if es_comodin(carta):
+                carta["color"] = "Ninguno"               # Los comodines regresan sin color
+
+        self.mazo = self.descarte
+        random.shuffle(self.mazo)
+        self.descarte = [centro]
+        self.hubo_rebarajo = True
+        print(f"[juego] Se rebarajaron {len(self.mazo)} cartas")
+        return True
+
     def robar(self):
-        if not self.mazo:
-            raise RuntimeError("El mazo está vacío")     # Rebarajar se programa en el commit #6
+        if not self.mazo and not self.rebarajar():     # NUEVO (#6): rebarajar si se acabó
+            raise RuntimeError("El mazo está vacío")
         return self.mazo.pop()
 
-    def robar_varias(self, id_jugador, cantidad):      # NUEVO (#5)
-        """Le da 'cantidad' cartas a una jugadora (o las que queden si se acaba el mazo)."""
+    def robar_varias(self, id_jugador, cantidad):
+        """Le da 'cantidad' cartas a una jugadora (o las que queden si se acaba todo)."""
         robadas = 0
         for _ in range(cantidad):
             try:
@@ -108,6 +135,12 @@ class Partida:
             carta = self.robar()
         self.descarte.append(carta)
 
+    def avisar_rebarajo(self):                         # NUEVO (#6)
+        """Si en esta jugada se rebarajó, lo agrega al mensaje que ven todas."""
+        if self.hubo_rebarajo:
+            self.ultima_accion += " (se rebarajó el mazo)"
+            self.hubo_rebarajo = False
+
     # ---------- Turnos ----------
 
     @property
@@ -129,7 +162,7 @@ class Partida:
 
     # ---------- Jugadas ----------
 
-    def tirar(self, id_jugador, indice):
+    def tirar(self, id_jugador, indice, color=None):   # NUEVO (#6): recibe el color
         """Intenta tirar una carta. Regresa None si salió bien, o un texto con el error."""
         if id_jugador != self.id_turno():
             return "No es tu turno."
@@ -140,21 +173,26 @@ class Partida:
 
         carta = mano[indice]
 
-        if carta["color"] == "Ninguno":
-            return "Los comodines todavía no están disponibles."   # Se activan en el commit #6
-
         if not es_valida(carta, self.carta_actual):
             return f"No puedes tirar {texto_carta(carta)} sobre {texto_carta(self.carta_actual)}."
 
-        mano.pop(indice)
-        self.descarte.append(carta)
-        self.ultima_accion = f"{self.nombre_de(id_jugador)} tiró {texto_carta(carta)}"
-        self.anotar(id_jugador, f"Tiró {texto_carta(carta)}")       # NUEVO (#5)
+        # NUEVO (#6): los comodines necesitan un color válido
+        if es_comodin(carta) and color not in COLORES:
+            return "Elige un color para el comodín."
 
-        self.aplicar_efecto(id_jugador, carta)                       # NUEVO (#5)
+        mano.pop(indice)
+        if es_comodin(carta):
+            carta["color"] = color                       # El comodín toma el color elegido
+        self.descarte.append(carta)
+
+        self.ultima_accion = f"{self.nombre_de(id_jugador)} tiró {texto_carta(carta)}"
+        self.anotar(id_jugador, f"Tiró {texto_carta(carta)}")
+
+        self.aplicar_efecto(id_jugador, carta)
+        self.avisar_rebarajo()                           # NUEVO (#6)
         return None
 
-    def aplicar_efecto(self, id_jugador, carta):       # NUEVO (#5)
+    def aplicar_efecto(self, id_jugador, carta):
         """Aplica el efecto de la carta tirada y decide de quién es el siguiente turno."""
         tipo = carta["tipo"]
 
@@ -183,11 +221,19 @@ class Partida:
             self.ultima_accion += f" → {self.nombre_de(victima)} roba {robadas} y pierde su turno"
             self.anotar(victima, f"Robó {robadas} cartas (por +2)")
 
+        elif tipo == "Mas4":                             # NUEVO (#6)
+            self.siguiente_turno()
+            victima = self.id_turno()
+            robadas = self.robar_varias(victima, 4)
+            self.siguiente_turno()
+            self.ultima_accion += f" → {self.nombre_de(victima)} roba {robadas} y pierde su turno"
+            self.anotar(victima, f"Robó {robadas} cartas (por +4)")
+
         else:
-            # Carta de número: turno normal
+            # Carta de número o Comodín: turno normal
             self.siguiente_turno()
 
-    def robar_carta(self, id_jugador):                 # NUEVO (#5)
+    def robar_carta(self, id_jugador):
         """La jugadora en turno roba una carta y el turno pasa a la siguiente."""
         if id_jugador != self.id_turno():
             return "No es tu turno."
@@ -198,6 +244,7 @@ class Partida:
         self.ultima_accion = f"{self.nombre_de(id_jugador)} robó una carta"
         self.anotar(id_jugador, "Robó una carta")
         self.siguiente_turno()
+        self.avisar_rebarajo()                           # NUEVO (#6)
         return None
 
     # ---------- Lo que ve cada jugadora ----------
@@ -215,5 +262,5 @@ class Partida:
             "turno": self.id_turno(),
             "direccion": self.direccion,
             "ultimaAccion": self.ultima_accion,
-            "cartasEnMazo": len(self.mazo),              # NUEVO (#5)
+            "cartasEnMazo": len(self.mazo),
         }
