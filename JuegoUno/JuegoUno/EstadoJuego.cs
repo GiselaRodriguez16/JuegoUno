@@ -22,6 +22,8 @@ namespace JuegoUno
         public int Direccion { get; set; }
         public string UltimaAccion { get; set; }   // Ej: "Gis tiró Rojo 5"
         public int CartasEnMazo { get; set; }
+        public int? UnoPendiente { get; set; }   // Id de quien debe cantar UNO, o null
+        public int UnoSegundos { get; set; }      // Segundos que le quedan
 
 
         private static readonly JsonSerializerOptions opciones = new JsonSerializerOptions

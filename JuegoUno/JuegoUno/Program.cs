@@ -137,7 +137,26 @@ try
         }
     };
 
-    formJuego.UnoClickeado += () => formJuego.MostrarAviso("El botón UNO se activa en un siguiente commit ");
+    // Cantar UNO: se avisa al servidor y él decide si cuenta
+    formJuego.UnoClickeado += async () =>
+    {
+        if (estadoActual == null) return;
+
+        if (estadoActual.UnoPendiente != estadoActual.MiId)
+        {
+            formJuego.MostrarAviso("Todavía no tienes que cantar UNO.");
+            return;
+        }
+
+        try
+        {
+            await conexion.EnviarAsync(new { tipo = "uno" });
+        }
+        catch
+        {
+            formJuego.MostrarAviso("❌ No se pudo enviar.");
+        }
+    };
 
     // Cuando la ventana ya está abierta, le pide al servidor su estado
     formJuego.Shown += async (s, e) => await conexion.EnviarAsync(new { tipo = "listo" });

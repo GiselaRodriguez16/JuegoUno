@@ -1,6 +1,10 @@
 import random
+import time                                            # NUEVO (#7)
+import math                                            # NUEVO (#7)
 
 COLORES = ["Rojo", "Amarillo", "Verde", "Azul"]
+SEGUNDOS_UNO = 10                                      # NUEVO (#7): tiempo para cantar UNO
+PENALIZACION_UNO = 2                                   # NUEVO (#7): cartas de castigo si no lo canta
 
 
 def crear_mazo():
@@ -29,7 +33,7 @@ def crear_mazo():
     return mazo
 
 
-def es_comodin(carta):                                 # NUEVO (#6)
+def es_comodin(carta):
     return carta["tipo"] in ("Comodin", "Mas4")
 
 
@@ -37,7 +41,7 @@ def texto_carta(carta):
     """Texto legible de una carta, para el log. Ej: 'Rojo 5', 'Azul Salta', 'Comodín (Verde)'."""
     if carta["tipo"] == "Numero":
         return f'{carta["color"]} {carta["numero"]}'
-    if es_comodin(carta):                              # NUEVO (#6)
+    if es_comodin(carta):
         nombre = "Comodín" if carta["tipo"] == "Comodin" else "+4"
         if carta["color"] in COLORES:
             return f'{nombre} ({carta["color"]})'
@@ -72,7 +76,14 @@ class Partida:
         self.direccion = 1                               # 1 = normal, -1 = reversa
         self.ultima_accion = "¡Empieza la partida!"      # Se muestra a todas
         self.logs_pendientes = []                        # (id_jugadora, texto) para LogJuego
-        self.hubo_rebarajo = False                       # NUEVO (#6)
+        self.hubo_rebarajo = False
+
+        # NUEVO (#7): control del UNO
+        self.uno_pendiente = None                        # Id de quien debe cantar UNO (None = nadie)
+        self.uno_limite = 0.0                            # Momento en que se acaba el tiempo
+        self.uno_token = 0                               # Número que identifica cada temporizador
+        self.uno_nuevo = False                           # True cuando hay que arrancar un temporizador
+
         self.repartir()
 
     # ---------- Log ----------
@@ -89,7 +100,7 @@ class Partida:
 
     # ---------- Mazo ----------
 
-    def rebarajar(self):                               # NUEVO (#6)
+    def rebarajar(self):
         """Cuando se acaba el mazo: las cartas tiradas (menos la del centro) se barajan y vuelven al mazo."""
         if len(self.descarte) <= 1:
             return False
@@ -107,7 +118,7 @@ class Partida:
         return True
 
     def robar(self):
-        if not self.mazo and not self.rebarajar():     # NUEVO (#6): rebarajar si se acabó
+        if not self.mazo and not self.rebarajar():
             raise RuntimeError("El mazo está vacío")
         return self.mazo.pop()
 
@@ -135,7 +146,7 @@ class Partida:
             carta = self.robar()
         self.descarte.append(carta)
 
-    def avisar_rebarajo(self):                         # NUEVO (#6)
+    def avisar_rebarajo(self):
         """Si en esta jugada se rebarajó, lo agrega al mensaje que ven todas."""
         if self.hubo_rebarajo:
             self.ultima_accion += " (se rebarajó el mazo)"
@@ -160,10 +171,61 @@ class Partida:
         """Pasa el turno a la siguiente jugadora según la dirección."""
         self.turno = (self.turno + self.direccion) % len(self.jugadoras)
 
+    # ---------- UNO ----------                       # NUEVO (#7)
+
+    def esperando_uno(self):
+        """Si alguien debe cantar UNO, regresa el texto de error para bloquear jugadas."""
+        if self.uno_pendiente is not None:
+            return f"Esperando a que {self.nombre_de(self.uno_pendiente)} cante UNO..."
+        return None
+
+    def iniciar_uno(self, id_jugador):
+        """La jugadora se quedó con 1 carta: empieza su tiempo para cantar UNO."""
+        self.uno_pendiente = id_jugador
+        self.uno_limite = time.monotonic() + SEGUNDOS_UNO
+        self.uno_token += 1
+        self.uno_nuevo = True
+        self.ultima_accion += f" → ¡a {self.nombre_de(id_jugador)} le queda 1 carta!"
+
+    def tomar_uno_nuevo(self):
+        """El servidor la llama después de cada jugada: si hay que arrancar temporizador, regresa su número."""
+        if self.uno_nuevo:
+            self.uno_nuevo = False
+            return self.uno_token
+        return None
+
+    def cantar_uno(self, id_jugador):
+        """La jugadora presionó el botón UNO."""
+        if self.uno_pendiente != id_jugador:
+            return "No tienes que cantar UNO ahora."
+
+        self.uno_pendiente = None
+        self.ultima_accion = f"¡{self.nombre_de(id_jugador)} cantó UNO!"
+        self.anotar(id_jugador, "Cantó UNO")
+        return None
+
+    def vencer_uno(self, token):
+        """Se acabó el tiempo. Si todavía no cantó UNO, roba cartas de castigo.
+        Regresa True si hubo castigo."""
+        if self.uno_pendiente is None or token != self.uno_token:
+            return False                                 # Ya cantó, o es un temporizador viejo
+
+        id_jugador = self.uno_pendiente
+        self.uno_pendiente = None
+        robadas = self.robar_varias(id_jugador, PENALIZACION_UNO)
+        self.ultima_accion = f"{self.nombre_de(id_jugador)} no cantó UNO → roba {robadas} de castigo"
+        self.anotar(id_jugador, f"No cantó UNO: robó {robadas} cartas de penalización")
+        self.avisar_rebarajo()
+        return True
+
     # ---------- Jugadas ----------
 
-    def tirar(self, id_jugador, indice, color=None):   # NUEVO (#6): recibe el color
+    def tirar(self, id_jugador, indice, color=None):
         """Intenta tirar una carta. Regresa None si salió bien, o un texto con el error."""
+        espera = self.esperando_uno()                    # NUEVO (#7)
+        if espera:
+            return espera
+
         if id_jugador != self.id_turno():
             return "No es tu turno."
 
@@ -176,7 +238,7 @@ class Partida:
         if not es_valida(carta, self.carta_actual):
             return f"No puedes tirar {texto_carta(carta)} sobre {texto_carta(self.carta_actual)}."
 
-        # NUEVO (#6): los comodines necesitan un color válido
+        # Los comodines necesitan un color válido
         if es_comodin(carta) and color not in COLORES:
             return "Elige un color para el comodín."
 
@@ -189,7 +251,11 @@ class Partida:
         self.anotar(id_jugador, f"Tiró {texto_carta(carta)}")
 
         self.aplicar_efecto(id_jugador, carta)
-        self.avisar_rebarajo()                           # NUEVO (#6)
+        self.avisar_rebarajo()
+
+        if len(mano) == 1:                               # NUEVO (#7): le queda una carta
+            self.iniciar_uno(id_jugador)
+
         return None
 
     def aplicar_efecto(self, id_jugador, carta):
@@ -221,7 +287,7 @@ class Partida:
             self.ultima_accion += f" → {self.nombre_de(victima)} roba {robadas} y pierde su turno"
             self.anotar(victima, f"Robó {robadas} cartas (por +2)")
 
-        elif tipo == "Mas4":                             # NUEVO (#6)
+        elif tipo == "Mas4":
             self.siguiente_turno()
             victima = self.id_turno()
             robadas = self.robar_varias(victima, 4)
@@ -235,6 +301,10 @@ class Partida:
 
     def robar_carta(self, id_jugador):
         """La jugadora en turno roba una carta y el turno pasa a la siguiente."""
+        espera = self.esperando_uno()                    # NUEVO (#7)
+        if espera:
+            return espera
+
         if id_jugador != self.id_turno():
             return "No es tu turno."
 
@@ -244,13 +314,17 @@ class Partida:
         self.ultima_accion = f"{self.nombre_de(id_jugador)} robó una carta"
         self.anotar(id_jugador, "Robó una carta")
         self.siguiente_turno()
-        self.avisar_rebarajo()                           # NUEVO (#6)
+        self.avisar_rebarajo()
         return None
 
     # ---------- Lo que ve cada jugadora ----------
 
     def estado_para(self, id_jugador):
         """Lo que ve UNA jugadora: su mano completa y de las demás solo cuántas cartas tienen."""
+        segundos_uno = 0                                 # NUEVO (#7)
+        if self.uno_pendiente is not None:
+            segundos_uno = max(0, math.ceil(self.uno_limite - time.monotonic()))
+
         return {
             "tipo": "estado",
             "miMano": self.manos.get(id_jugador, []),
@@ -263,4 +337,6 @@ class Partida:
             "direccion": self.direccion,
             "ultimaAccion": self.ultima_accion,
             "cartasEnMazo": len(self.mazo),
+            "unoPendiente": self.uno_pendiente,          # NUEVO (#7): id o null
+            "unoSegundos": segundos_uno,                 # NUEVO (#7)
         }

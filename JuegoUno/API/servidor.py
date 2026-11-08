@@ -6,7 +6,7 @@ from datetime import datetime                       # NUEVO (#3)
 from database import SessionLocal
 from models import Jugador, LogJuego                # NUEVO (#3): LogJuego
 from models import Partida as PartidaBD             # NUEVO (#3): tabla Partidas
-from juego import Partida                           # NUEVO (#3): lógica del juego
+from juego import Partida, SEGUNDOS_UNO             # NUEVO (#7): SEGUNDOS_UNO                      # NUEVO (#3): lógica del juego
 
 HOST = "0.0.0.0"   # Acepta conexiones de cualquier computadora de la red
 PUERTO = 5000
@@ -111,21 +111,50 @@ def enviar_estado_a_todas():                         # NUEVO (#3)
             except OSError:
                 pass
 
-def ejecutar_jugada(conexion, jugada):                 # NUEVO (#5)
-    """Hace una jugada (tirar, robar...) de forma segura y avisa a todas.
+def ejecutar_jugada(conexion, jugada):
+    """Hace una jugada (tirar, robar, UNO...) de forma segura y avisa a todas.
     'jugada' es una función que recibe (partida, id_jugadora) y regresa None o un texto de error."""
     with candado:
         if partida is None or conexion not in jugadoras:
             return
+        p = partida
         id_jugador = jugadoras[conexion]["id"]
-        error = jugada(partida, id_jugador)
-        accion = partida.ultima_accion
-        id_partida = partida.id
-        logs = partida.sacar_logs()
+        error = jugada(p, id_jugador)
+        accion = p.ultima_accion
+        id_partida = p.id
+        logs = p.sacar_logs()
+        token_uno = p.tomar_uno_nuevo()              # NUEVO (#7)
 
     if error:
         enviar(conexion, {"tipo": "error", "mensaje": error})
         return
+
+    print(f"[juego] {accion}")
+    for id_j, texto in logs:
+        registrar_log(id_partida, id_j, texto)
+
+    # NUEVO (#7): si alguien se quedó con 1 carta, arranca su temporizador
+    if token_uno is not None:
+        temporizador = threading.Timer(SEGUNDOS_UNO, se_acabo_tiempo_uno, args=(p, token_uno))
+        temporizador.daemon = True
+        temporizador.start()
+        print(f"[juego] Temporizador de UNO: {SEGUNDOS_UNO} segundos")
+
+    enviar_estado_a_todas()
+
+
+def se_acabo_tiempo_uno(p, token):                   # NUEVO (#7)
+    """La llama el temporizador cuando se acaban los segundos para cantar UNO."""
+    with candado:
+        if partida is not p:
+            return                                   # Esa partida ya no existe
+        castigada = p.vencer_uno(token)
+        accion = p.ultima_accion
+        id_partida = p.id
+        logs = p.sacar_logs()
+
+    if not castigada:
+        return                                       # Sí cantó UNO a tiempo
 
     print(f"[juego] {accion}")
     for id_j, texto in logs:
@@ -211,7 +240,7 @@ def procesar_mensaje(conexion, datos):
             estado = partida.estado_para(jugadoras[conexion]["id"])
         enviar(conexion, estado)
 
-        elif tipo == "tirar":
+    elif tipo == "tirar":
         try:
             indice = int(datos.get("indice", -1))
         except (TypeError, ValueError):
@@ -221,6 +250,10 @@ def procesar_mensaje(conexion, datos):
 
     elif tipo == "robar":                            # NUEVO (#5)
         ejecutar_jugada(conexion, lambda p, id_j: p.robar_carta(id_j))
+
+    
+    elif tipo == "uno":                              # NUEVO (#7)
+        ejecutar_jugada(conexion, lambda p, id_j: p.cantar_uno(id_j))
 
     else:
         print(f"[?] Mensaje desconocido: {datos}")

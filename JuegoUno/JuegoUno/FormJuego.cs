@@ -20,6 +20,11 @@ public class FormJuego : Form
     private System.Windows.Forms.Label lblSentido;
     private System.Windows.Forms.Label lblColorElegido;
 
+    private System.Windows.Forms.Label lblUno;
+    private System.Windows.Forms.Timer timerUno;   // Solo para mostrar el contador; el tiempo real lo lleva el servidor
+    private int segundosUno;
+    private string textoUno = "";
+
     // Guarda las imágenes ya cargadas para no abrir el archivo cada vez que se redibuja
     private readonly Dictionary<string, Image> cacheImagenes = new Dictionary<string, Image>();
 
@@ -117,6 +122,28 @@ public class FormJuego : Form
         lblColorElegido.Visible = false;
         this.Controls.Add(lblColorElegido);
 
+
+        // Contador del UNO (a la derecha del botón)
+        lblUno = new System.Windows.Forms.Label();
+        lblUno.Text = "";
+        lblUno.ForeColor = Color.Yellow;
+        lblUno.Font = new Font("Arial", 13, FontStyle.Bold);
+        lblUno.Location = new Point(850, 315);
+        lblUno.AutoSize = true;
+        lblUno.MaximumSize = new Size(220, 0);
+        lblUno.Visible = false;
+        this.Controls.Add(lblUno);
+
+        timerUno = new System.Windows.Forms.Timer();
+        timerUno.Interval = 1000;   // Cada segundo
+        timerUno.Tick += (s, e) =>
+        {
+            if (segundosUno > 0) segundosUno--;
+            lblUno.Text = $"{textoUno} {segundosUno}";
+            if (segundosUno <= 0) timerUno.Stop();
+        };
+        this.FormClosed += (s, e) => timerUno.Stop();
+
         lblMisCartas = new System.Windows.Forms.Label();
         lblMisCartas.Text = "Tus cartas";
         lblMisCartas.Font = new Font("Arial", 12, FontStyle.Bold);
@@ -155,11 +182,14 @@ public class FormJuego : Form
     // Dibuja la mesa tal como la manda el servidor
     public void MostrarEstado(EstadoJuego estado)
     {
-        bool esMiTurno = estado.Turno == estado.MiId;
+        bool unoEnEspera = estado.UnoPendiente.HasValue;
+        bool esMiTurno = estado.Turno == estado.MiId && !unoEnEspera;   // Mientras alguien canta UNO, nadie juega
         string nombreTurno = estado.Jugadoras.FirstOrDefault(j => j.Id == estado.Turno)?.Nombre ?? "...";
         string miNombre = estado.Jugadoras.FirstOrDefault(j => j.Id == estado.MiId)?.Nombre ?? "";
 
         lblTurno.Text = esMiTurno ? "¡Es tu turno!" : $"Turno de: {nombreTurno}";
+
+        if (unoEnEspera) lblTurno.Text = "⏸ Esperando a que canten UNO...";
 
         // Última jugada, la ven todas (ej. "Gis tiró Rojo 5")
         lblAviso.Text = estado.UltimaAccion ?? "";
@@ -265,6 +295,36 @@ public class FormJuego : Form
         {
             picMazo.BackColor = ColoresJuego.FondoVentana;
             picMazo.Padding = new Padding(0);
+        }
+
+        ActualizarUno(estado);
+    }
+
+    // Muestra el contador y prende el botón UNO para quien debe cantarlo
+    private void ActualizarUno(EstadoJuego estado)
+    {
+        if (estado.UnoPendiente.HasValue)
+        {
+            int idUno = estado.UnoPendiente.Value;
+            bool soyYo = idUno == estado.MiId;
+            string nombre = estado.Jugadoras.FirstOrDefault(j => j.Id == idUno)?.Nombre ?? "";
+
+            textoUno = soyYo ? "¡Presiona UNO!" : $"{nombre} debe cantar UNO:";
+            segundosUno = estado.UnoSegundos;
+            lblUno.Text = $"{textoUno} {segundosUno}";
+            lblUno.Visible = true;
+
+            picUno.BackColor = soyYo ? Color.Gold : ColoresJuego.FondoVentana;
+            picUno.Padding = soyYo ? new Padding(4) : new Padding(0);
+
+            timerUno.Start();
+        }
+        else
+        {
+            timerUno.Stop();
+            lblUno.Visible = false;
+            picUno.BackColor = ColoresJuego.FondoVentana;
+            picUno.Padding = new Padding(0);
         }
     }
 
