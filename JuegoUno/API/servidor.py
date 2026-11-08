@@ -4,7 +4,7 @@ import json
 from datetime import datetime                       # NUEVO (#3)
 
 from database import SessionLocal
-from models import Jugador, LogJuego                # NUEVO (#3): LogJuego
+from models import Jugador, LogJuego, HistorialPartida   # NUEVO (#8): HistorialPartida
 from models import Partida as PartidaBD             # NUEVO (#3): tabla Partidas
 from juego import Partida, SEGUNDOS_UNO             # NUEVO (#7): SEGUNDOS_UNO                      # NUEVO (#3): lógica del juego
 
@@ -83,6 +83,40 @@ def registrar_log(id_partida, id_jugador, movimiento):   # NUEVO (#3)
         db.close()
 
 
+
+def guardar_historial(p):                            # NUEVO (#8)
+    """Guarda en HistorialPartidas: 'Ganada' para la ganadora y 'Perdida' para las demás."""
+    db = SessionLocal()
+    try:
+        for j in p.todas:
+            resultado = "Ganada" if j["id"] == p.ganadora else "Perdida"
+            db.add(HistorialPartida(
+                id_partida=p.id,
+                id_jugador=j["id"],
+                resultado=resultado
+            ))
+        db.commit()
+        print(f"[juego] Historial de la partida {p.id} guardado")
+    except Exception as e:
+        print(f"[!] No se pudo guardar el historial: {e}")
+    finally:
+        db.close()
+
+
+def revisar_fin_de_partida(p):                       # NUEVO (#8)
+    """Si la partida ya tiene ganadora: guarda el historial y deja el servidor libre para otra."""
+    global partida, partida_iniciada
+    with candado:
+        if p.ganadora is None or p.historial_guardado:
+            return
+        p.historial_guardado = True
+        if partida is p:
+            partida = None
+            partida_iniciada = False
+            jugadoras.clear()
+    print(f"[juego] Fin de la partida {p.id}")
+    guardar_historial(p)
+
 # ---------- Sala de espera ----------
 
 def lista_jugadoras():
@@ -141,7 +175,7 @@ def ejecutar_jugada(conexion, jugada):
         print(f"[juego] Temporizador de UNO: {SEGUNDOS_UNO} segundos")
 
     enviar_estado_a_todas()
-
+    revisar_fin_de_partida(p)                        # NUEVO (#8)
 
 def se_acabo_tiempo_uno(p, token):                   # NUEVO (#7)
     """La llama el temporizador cuando se acaban los segundos para cantar UNO."""
@@ -288,18 +322,35 @@ def atender_cliente(conexion, direccion):
                 procesar_mensaje(conexion, datos)
     except OSError:
         pass
-    finally:
+        finally:
+        p = None
         with candado:
             if conexion in clientes:
                 clientes.remove(conexion)
             salio = jugadoras.pop(conexion, None)
             total = len(clientes)
+
+            # NUEVO (#8): si se va alguien a media partida, se quita del juego
+            if salio and partida is not None:
+                p = partida
+                p.quitar_jugadora(salio["id"])
+                accion = p.ultima_accion
+                logs = p.sacar_logs()
+
             if total == 0:
                 partida_iniciada = False   # Si se van todas, se puede empezar otra
-                partida = None             # NUEVO (#3)
+                partida = None
+
         print(f"[-] Se desconectó {direccion[0]}")
         enviar_a_todos({"tipo": "info", "mensaje": f"Jugadoras conectadas: {total}"})
-        if salio:
+
+        if p is not None:                  # NUEVO (#8): estaba jugando
+            print(f"[juego] {accion}")
+            for id_j, texto in logs:
+                registrar_log(p.id, id_j, texto)
+            enviar_estado_a_todas()
+            revisar_fin_de_partida(p)
+        elif salio:                        # Estaba en la sala de espera
             avisar_sala()
 
 

@@ -1,10 +1,10 @@
 import random
-import time                                            # NUEVO (#7)
-import math                                            # NUEVO (#7)
+import time
+import math
 
 COLORES = ["Rojo", "Amarillo", "Verde", "Azul"]
-SEGUNDOS_UNO = 10                                      # NUEVO (#7): tiempo para cantar UNO
-PENALIZACION_UNO = 2                                   # NUEVO (#7): cartas de castigo si no lo canta
+SEGUNDOS_UNO = 10                                      # Tiempo para cantar UNO
+PENALIZACION_UNO = 2                                   # Cartas de castigo si no lo canta
 
 
 def crear_mazo():
@@ -68,7 +68,8 @@ class Partida:
     def __init__(self, id_partida, jugadoras):
         # jugadoras: lista de {"id": ..., "nombre": ...} en el orden en que se unieron
         self.id = id_partida
-        self.jugadoras = jugadoras
+        self.jugadoras = jugadoras                       # Las que siguen jugando
+        self.todas = list(jugadoras)                     # NUEVO (#8): todas las que empezaron (para el historial)
         self.mazo = crear_mazo()
         self.descarte = []                               # Cartas tiradas; la última es la del centro
         self.manos = {j["id"]: [] for j in jugadoras}    # id de jugadora -> lista de cartas
@@ -78,11 +79,15 @@ class Partida:
         self.logs_pendientes = []                        # (id_jugadora, texto) para LogJuego
         self.hubo_rebarajo = False
 
-        # NUEVO (#7): control del UNO
+        # Control del UNO
         self.uno_pendiente = None                        # Id de quien debe cantar UNO (None = nadie)
         self.uno_limite = 0.0                            # Momento en que se acaba el tiempo
         self.uno_token = 0                               # Número que identifica cada temporizador
         self.uno_nuevo = False                           # True cuando hay que arrancar un temporizador
+
+        # NUEVO (#8): fin de la partida
+        self.ganadora = None                             # Id de la ganadora (None = sigue el juego)
+        self.historial_guardado = False
 
         self.repartir()
 
@@ -162,7 +167,7 @@ class Partida:
         return self.jugadoras[self.turno]["id"]
 
     def nombre_de(self, id_jugador):
-        for j in self.jugadoras:
+        for j in self.todas:                             # NUEVO (#8): busca también a las que se fueron
             if j["id"] == id_jugador:
                 return j["nombre"]
         return "?"
@@ -171,10 +176,59 @@ class Partida:
         """Pasa el turno a la siguiente jugadora según la dirección."""
         self.turno = (self.turno + self.direccion) % len(self.jugadoras)
 
-    # ---------- UNO ----------                       # NUEVO (#7)
+    # ---------- Fin de partida ----------             # NUEVO (#8)
+
+    def declarar_ganadora(self, id_jugador, motivo=""):
+        """Termina la partida con una ganadora."""
+        self.ganadora = id_jugador
+        self.uno_pendiente = None
+        texto = f"¡{self.nombre_de(id_jugador)} ganó la partida!"
+        if motivo:
+            texto += f" ({motivo})"
+        self.ultima_accion += f" → {texto}"
+        self.anotar(id_jugador, "Ganó la partida")
+
+    def quitar_jugadora(self, id_jugador):
+        """Alguien se desconectó a media partida: se quita del juego y sus cartas vuelven al mazo."""
+        if self.ganadora is not None:
+            return
+
+        pos = None
+        for i, j in enumerate(self.jugadoras):
+            if j["id"] == id_jugador:
+                pos = i
+                break
+        if pos is None:
+            return
+
+        era_su_turno = (pos == self.turno)
+        self.mazo[0:0] = self.manos.pop(id_jugador)      # Sus cartas regresan al fondo del mazo
+        self.jugadoras.pop(pos)
+
+        if self.uno_pendiente == id_jugador:
+            self.uno_pendiente = None
+
+        self.ultima_accion = f"{self.nombre_de(id_jugador)} se desconectó"
+        self.anotar(id_jugador, "Se desconectó de la partida")
+
+        # Si solo queda una, gana por abandono
+        if len(self.jugadoras) == 1:
+            self.declarar_ganadora(self.jugadoras[0]["id"], "las demás abandonaron")
+            return
+
+        # Acomodar el turno para que no se brinque a nadie
+        if pos < self.turno:
+            self.turno -= 1
+        elif era_su_turno and self.direccion == -1:
+            self.turno -= 1
+        self.turno %= len(self.jugadoras)
+
+    # ---------- UNO ----------
 
     def esperando_uno(self):
-        """Si alguien debe cantar UNO, regresa el texto de error para bloquear jugadas."""
+        """Si la partida terminó o alguien debe cantar UNO, regresa el texto de error para bloquear jugadas."""
+        if self.ganadora is not None:                    # NUEVO (#8)
+            return "La partida ya terminó."
         if self.uno_pendiente is not None:
             return f"Esperando a que {self.nombre_de(self.uno_pendiente)} cante UNO..."
         return None
@@ -222,7 +276,7 @@ class Partida:
 
     def tirar(self, id_jugador, indice, color=None):
         """Intenta tirar una carta. Regresa None si salió bien, o un texto con el error."""
-        espera = self.esperando_uno()                    # NUEVO (#7)
+        espera = self.esperando_uno()
         if espera:
             return espera
 
@@ -253,7 +307,9 @@ class Partida:
         self.aplicar_efecto(id_jugador, carta)
         self.avisar_rebarajo()
 
-        if len(mano) == 1:                               # NUEVO (#7): le queda una carta
+        if len(mano) == 0:                               # NUEVO (#8): ¡se quedó sin cartas!
+            self.declarar_ganadora(id_jugador)
+        elif len(mano) == 1:                             # Le queda una carta: debe cantar UNO
             self.iniciar_uno(id_jugador)
 
         return None
@@ -301,7 +357,7 @@ class Partida:
 
     def robar_carta(self, id_jugador):
         """La jugadora en turno roba una carta y el turno pasa a la siguiente."""
-        espera = self.esperando_uno()                    # NUEVO (#7)
+        espera = self.esperando_uno()
         if espera:
             return espera
 
@@ -321,7 +377,7 @@ class Partida:
 
     def estado_para(self, id_jugador):
         """Lo que ve UNA jugadora: su mano completa y de las demás solo cuántas cartas tienen."""
-        segundos_uno = 0                                 # NUEVO (#7)
+        segundos_uno = 0
         if self.uno_pendiente is not None:
             segundos_uno = max(0, math.ceil(self.uno_limite - time.monotonic()))
 
@@ -337,6 +393,7 @@ class Partida:
             "direccion": self.direccion,
             "ultimaAccion": self.ultima_accion,
             "cartasEnMazo": len(self.mazo),
-            "unoPendiente": self.uno_pendiente,          # NUEVO (#7): id o null
-            "unoSegundos": segundos_uno,                 # NUEVO (#7)
+            "unoPendiente": self.uno_pendiente,
+            "unoSegundos": segundos_uno,
+            "ganadora": self.ganadora,                   # NUEVO (#8): id o null
         }

@@ -24,7 +24,7 @@ namespace JuegoUno
         public int CartasEnMazo { get; set; }
         public int? UnoPendiente { get; set; }   // Id de quien debe cantar UNO, o null
         public int UnoSegundos { get; set; }      // Segundos que le quedan
-
+        public int? Ganadora { get; set; }        // Id de la ganadora, o null si sigue el juego
 
         private static readonly JsonSerializerOptions opciones = new JsonSerializerOptions
         {

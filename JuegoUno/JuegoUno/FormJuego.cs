@@ -183,13 +183,15 @@ public class FormJuego : Form
     public void MostrarEstado(EstadoJuego estado)
     {
         bool unoEnEspera = estado.UnoPendiente.HasValue;
-        bool esMiTurno = estado.Turno == estado.MiId && !unoEnEspera;   // Mientras alguien canta UNO, nadie juega
+        bool terminada = estado.Ganadora.HasValue;
+        bool esMiTurno = estado.Turno == estado.MiId && !unoEnEspera && !terminada;   // Mientras alguien canta UNO o si ya terminó, nadie juega
         string nombreTurno = estado.Jugadoras.FirstOrDefault(j => j.Id == estado.Turno)?.Nombre ?? "...";
         string miNombre = estado.Jugadoras.FirstOrDefault(j => j.Id == estado.MiId)?.Nombre ?? "";
 
         lblTurno.Text = esMiTurno ? "¡Es tu turno!" : $"Turno de: {nombreTurno}";
 
         if (unoEnEspera) lblTurno.Text = "⏸ Esperando a que canten UNO...";
+        if (terminada) lblTurno.Text = "Fin de la partida";
 
         // Última jugada, la ven todas (ej. "Gis tiró Rojo 5")
         lblAviso.Text = estado.UltimaAccion ?? "";

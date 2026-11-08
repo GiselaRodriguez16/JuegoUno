@@ -43,6 +43,7 @@ try
     FormJuego formJuego = new FormJuego();
 
     EstadoJuego estadoActual = null;   // El último estado que mandó el servidor
+    bool finMostrado = false;          // Para mostrar la pantalla final una sola vez
 
     conexion.MensajeRecibido += (mensaje) =>
     {
@@ -57,6 +58,17 @@ try
                 {
                     estadoActual = estado;
                     formJuego.MostrarEstado(estado);
+
+                    // Fin de la partida: se muestra la pantalla final y se cierra el juego
+                    if (estado.Ganadora.HasValue && !finMostrado)
+                    {
+                        finMostrado = true;
+                        using (FormFinPartida fin = new FormFinPartida(estado))
+                        {
+                            fin.ShowDialog(formJuego);
+                        }
+                        formJuego.Close();
+                    }
                 });
             }
             else if (tipo == "error")
@@ -71,8 +83,14 @@ try
         }
     };
 
+    // Si se cae el servidor, se avisa y se cierra el juego
     conexion.Desconectado += () =>
-        formJuego.EnPantalla(() => formJuego.MostrarAviso(" Se perdió la conexión con el servidor."));
+        formJuego.EnPantalla(() =>
+        {
+            if (finMostrado) return;
+            MessageBox.Show("Se perdió la conexión con el servidor. El juego se cerrará.", "UNO");
+            formJuego.Close();
+        });
 
     // Por ahora solo se muestra la partida. Tirar, robar y UNO se programan en los siguientes commits.
     // Tirar carta: se manda al servidor y él decide si es válida
